@@ -1,0 +1,166 @@
+/* ══════════════════════════════════════════════════════════════
+   Tape — phosphor terminal mosaic.
+   Pure black, amber/green phosphor, monospace, square corners,
+   titled tiles like a 1980s pro terminal reborn for 2026.
+   ══════════════════════════════════════════════════════════════ */
+
+html.tape {
+  --background: 0 0% 2%;
+  --foreground: 43 85% 72%;
+  --card: 40 25% 4%;
+  --card-foreground: 43 85% 72%;
+  --primary: 39 100% 50%;
+  --primary-foreground: 0 0% 0%;
+  --secondary: 40 22% 7%;
+  --secondary-foreground: 43 85% 72%;
+  --muted: 40 20% 9%;
+  --muted-foreground: 43 30% 42%;
+  --accent: 39 100% 50%;
+  --accent-foreground: 0 0% 0%;
+  --destructive: 10 90% 55%;
+  --destructive-foreground: 0 0% 0%;
+  --border: 43 40% 14%;
+  --input: 40 22% 6%;
+  --ring: 39 100% 50%;
+  --radius: 0;
+  --success: 120 85% 55%;
+  --warning: 39 100% 50%;
+  --buy: 120 85% 55%;
+  --sell: 10 90% 55%;
+  --panel-header: 40 25% 3%;
+  --glow: 39 100% 50%;
+}
+
+.tp-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* faint static scanlines — purely decorative, no motion */
+.tp-page::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(0deg, transparent 0 2px, hsl(43 85% 72% / 0.015) 2px 4px);
+}
+
+.tp-tile {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tp-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px;
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tp-quote {
+  min-width: 132px;
+  padding: 5px 10px;
+  border-right: 1px solid hsl(var(--border));
+  text-align: left;
+  font-size: 11px;
+  line-height: 1.35;
+  transition: background-color 0.15s ease;
+}
+
+.tp-quote:hover {
+  background: hsl(var(--muted));
+}
+
+.tp-quote[data-active="true"] {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.tp-quote[data-active="true"] .tp-bid,
+.tp-quote[data-active="true"] .tp-ask {
+  color: hsl(var(--accent-foreground));
+}
+
+.tp-bid {
+  color: hsl(var(--buy));
+}
+.tp-ask {
+  color: hsl(var(--sell));
+}
+
+.tp-fkey {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border: 1px solid hsl(var(--border));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  transition:
+    color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.tp-fkey:hover {
+  color: hsl(var(--foreground));
+}
+
+.tp-fkey[data-active="true"] {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.tp-fkey-code {
+  color: hsl(var(--accent));
+}
+
+.tp-fkey[data-active="true"] .tp-fkey-code {
+  color: hsl(var(--accent-foreground));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .tp-cursor {
+    animation: tp-cursor 1.1s steps(1) infinite;
+  }
+  @keyframes tp-cursor {
+    0%,
+    49% {
+      opacity: 1;
+    }
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  .tp-reveal {
+    animation: tp-reveal 0.4s steps(6) both;
+  }
+  @keyframes tp-reveal {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}

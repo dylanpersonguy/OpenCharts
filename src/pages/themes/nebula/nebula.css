@@ -1,0 +1,178 @@
+/* ══════════════════════════════════════════════════════════════
+   Nebula — neon violet aurora terminal theme.
+   Deep indigo mesh-gradient backdrop with a slow drift, glassy
+   panels, gold/pink market colors, glowing pill controls.
+   ══════════════════════════════════════════════════════════════ */
+
+html.nebula {
+  --background: 249 45% 9%;
+  --foreground: 250 30% 92%;
+  --card: 249 38% 13%;
+  --card-foreground: 250 30% 92%;
+  --primary: 270 91% 65%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 249 32% 17%;
+  --secondary-foreground: 250 30% 92%;
+  --muted: 249 28% 19%;
+  --muted-foreground: 249 18% 64%;
+  --accent: 326 87% 70%;
+  --accent-foreground: 326 60% 10%;
+  --destructive: 326 87% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 249 30% 21%;
+  --input: 249 34% 15%;
+  --ring: 270 91% 65%;
+  --radius: 1rem;
+  --success: 43 96% 56%;
+  --warning: 43 96% 56%;
+  --buy: 43 96% 56%; /* gold up — Voltrex palette */
+  --sell: 326 87% 70%; /* pink down */
+  --panel-header: 249 40% 11%;
+  --glow: 270 91% 65%;
+}
+
+.nb-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+/* Aurora mesh backdrop (slow drift, reduced-motion gated) */
+.nb-page::before {
+  content: "";
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 35% at 20% 15%, hsl(270 91% 65% / 0.16), transparent 70%),
+    radial-gradient(35% 30% at 85% 10%, hsl(326 87% 70% / 0.12), transparent 70%),
+    radial-gradient(45% 40% at 65% 95%, hsl(220 91% 60% / 0.1), transparent 70%);
+}
+
+.nb-panel {
+  position: relative;
+  background: hsl(var(--card) / 0.72);
+  border: 1px solid hsl(var(--border) / 0.9);
+  border-radius: 16px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  transition:
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.nb-panel:hover {
+  border-color: hsl(270 60% 38%);
+  box-shadow: 0 0 28px hsl(270 91% 65% / 0.1);
+}
+
+.nb-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.nb-pricechip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary) / 0.7);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.nb-ticker {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.nb-ticker::-webkit-scrollbar {
+  display: none;
+}
+
+.nb-tickercard {
+  min-width: 148px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  border: 1px solid hsl(var(--border) / 0.9);
+  background: hsl(var(--card) / 0.65);
+  backdrop-filter: blur(10px);
+  text-align: left;
+  transition:
+    transform 0.25s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.nb-tickercard:hover {
+  transform: translateY(-2px);
+  border-color: hsl(326 60% 45%);
+}
+
+.nb-tickercard[data-active="true"] {
+  border-color: hsl(var(--accent) / 0.7);
+  box-shadow: 0 0 22px hsl(326 87% 70% / 0.18);
+}
+
+.nb-pos {
+  color: hsl(var(--buy));
+}
+.nb-neg {
+  color: hsl(var(--sell));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .nb-page::before {
+    animation: nb-drift 14s ease-in-out infinite alternate;
+  }
+  @keyframes nb-drift {
+    from {
+      transform: translate3d(-2%, -1%, 0) scale(1);
+    }
+    to {
+      transform: translate3d(2%, 2%, 0) scale(1.06);
+    }
+  }
+
+  .nb-reveal {
+    animation: nb-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .nb-reveal-2 {
+    animation: nb-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+  }
+  @keyframes nb-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .nb-glowpulse {
+    animation: nb-glowpulse 3.5s ease-in-out infinite;
+  }
+  @keyframes nb-glowpulse {
+    0%,
+    100% {
+      text-shadow: 0 0 12px hsl(326 87% 70% / 0.25);
+    }
+    50% {
+      text-shadow: 0 0 26px hsl(326 87% 70% / 0.5);
+    }
+  }
+}

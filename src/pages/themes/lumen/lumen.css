@@ -1,0 +1,157 @@
+/* ══════════════════════════════════════════════════════════════
+   Lumen — soft near-black terminal with a mint glow.
+   Generous radii, breathable spacing, luminous accent halos,
+   calm typography. FundedX-style "premium lounge" feel.
+   ══════════════════════════════════════════════════════════════ */
+
+html.lumen {
+  --background: 165 12% 4%;
+  --foreground: 160 12% 90%;
+  --card: 163 11% 7%;
+  --card-foreground: 160 12% 90%;
+  --primary: 166 72% 60%;
+  --primary-foreground: 168 60% 8%;
+  --secondary: 162 10% 10%;
+  --secondary-foreground: 160 12% 90%;
+  --muted: 162 9% 12%;
+  --muted-foreground: 160 7% 55%;
+  --accent: 166 72% 60%;
+  --accent-foreground: 168 60% 8%;
+  --destructive: 0 70% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 162 9% 14%;
+  --input: 162 10% 9%;
+  --ring: 166 72% 60%;
+  --radius: 1rem;
+  --success: 166 72% 50%;
+  --warning: 38 92% 55%;
+  --buy: 166 72% 50%;
+  --sell: 0 70% 60%;
+  --panel-header: 163 11% 6%;
+  --glow: 166 72% 60%;
+}
+
+.lm-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(900px 420px at 85% -160px, hsl(166 72% 60% / 0.08), transparent 65%),
+    radial-gradient(700px 380px at -10% 110%, hsl(166 72% 60% / 0.05), transparent 60%),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.lm-card {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 18px;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.lm-card:hover {
+  border-color: hsl(166 40% 24%);
+  box-shadow: 0 0 32px hsl(166 72% 60% / 0.06);
+}
+
+.lm-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 16px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 14px;
+  background: hsl(var(--card) / 0.8);
+}
+
+.lm-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.lm-chipstrip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.lm-chipstrip::-webkit-scrollbar {
+  display: none;
+}
+
+.lm-symchip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card) / 0.7);
+  font-size: 11px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.lm-symchip:hover {
+  color: hsl(var(--foreground));
+  border-color: hsl(166 40% 26%);
+}
+
+.lm-symchip[data-active="true"] {
+  color: hsl(var(--accent));
+  border-color: hsl(var(--accent) / 0.6);
+  box-shadow: 0 0 18px hsl(166 72% 60% / 0.18);
+}
+
+.lm-pos {
+  color: hsl(var(--buy));
+}
+.lm-neg {
+  color: hsl(var(--sell));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lm-reveal {
+    animation: lm-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .lm-reveal-2 {
+    animation: lm-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.1s both;
+  }
+  @keyframes lm-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .lm-breathe {
+    animation: lm-breathe 4s ease-in-out infinite;
+  }
+  @keyframes lm-breathe {
+    0%,
+    100% {
+      box-shadow: 0 0 14px hsl(166 72% 60% / 0.12);
+    }
+    50% {
+      box-shadow: 0 0 30px hsl(166 72% 60% / 0.26);
+    }
+  }
+}

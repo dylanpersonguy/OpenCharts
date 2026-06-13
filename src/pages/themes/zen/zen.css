@@ -1,0 +1,204 @@
+/* ══════════════════════════════════════════════════════════════
+   Zen — immersive full-bleed chart desk.
+   The chart IS the page. Everything else floats: a frosted
+   toolbar veil, a HUD, a trade pod and edge drawers. Ice-cyan
+   accent on deep blue-black.
+   ══════════════════════════════════════════════════════════════ */
+
+html.zen {
+  --background: 219 35% 5%;
+  --foreground: 210 25% 90%;
+  --card: 218 28% 9%;
+  --card-foreground: 210 25% 90%;
+  --primary: 190 90% 55%;
+  --primary-foreground: 200 60% 8%;
+  --secondary: 218 24% 13%;
+  --secondary-foreground: 210 25% 90%;
+  --muted: 218 22% 15%;
+  --muted-foreground: 215 16% 58%;
+  --accent: 190 90% 55%;
+  --accent-foreground: 200 60% 8%;
+  --destructive: 350 85% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 218 22% 17%;
+  --input: 218 26% 11%;
+  --ring: 190 90% 55%;
+  --radius: 0.875rem;
+  --success: 152 70% 48%;
+  --warning: 38 92% 55%;
+  --buy: 152 70% 48%;
+  --sell: 350 85% 60%;
+  --panel-header: 218 28% 8%;
+  --glow: 190 90% 55%;
+}
+
+.zn-page {
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.zn-glass {
+  background: hsl(var(--card) / 0.78);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid hsl(var(--border) / 0.8);
+}
+
+.zn-veil {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+}
+
+.zn-hud {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+}
+
+.zn-hud-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 14px;
+  border-radius: 12px;
+}
+
+.zn-label {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.zn-pod {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 30;
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 48px hsl(219 35% 2% / 0.6);
+}
+
+.zn-edge-tab {
+  position: absolute;
+  z-index: 25;
+  padding: 8px 12px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  border-radius: 0 10px 10px 0;
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.zn-edge-tab:hover {
+  color: hsl(var(--accent));
+}
+
+.zn-edge-left {
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  writing-mode: vertical-rl;
+  border-radius: 0 10px 10px 0;
+}
+
+.zn-drawer-left {
+  position: absolute;
+  left: 0;
+  top: 56px;
+  bottom: 0;
+  z-index: 28;
+  width: 280px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 0 16px 0 0;
+  overflow: hidden;
+}
+
+.zn-drawer-bottom {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 26;
+  border-radius: 16px 16px 0 0;
+  overflow: hidden;
+}
+
+.zn-bottom-tab {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 25;
+  border-radius: 10px 10px 0 0;
+  border-bottom: 0;
+}
+
+.zn-pos {
+  color: hsl(var(--buy));
+}
+.zn-neg {
+  color: hsl(var(--sell));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .zn-float-in {
+    animation: zn-float-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes zn-float-in {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .zn-drawer-left {
+    animation: zn-slide-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes zn-slide-right {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  .zn-drawer-bottom {
+    animation: zn-slide-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes zn-slide-up {
+    from {
+      transform: translateY(100%);
+    }
+    to {
+      transform: translateY(0);
+    }
+  }
+}

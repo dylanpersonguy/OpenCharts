@@ -1,0 +1,125 @@
+/* /tradingv2 — scoped re-theme + island layout.
+
+   Every reused panel (ChartToolbar, OrderPanel, BottomPanel, Watchlist, DOM)
+   styles itself with shadcn HSL tokens, so overriding them inside .tv2-scope
+   re-skins the whole terminal without forking components.
+
+   Design system (UI/UX Pro Max — fintech dashboard verdict):
+   Dark OLED canvas + glass islands, PropSim brand-blue primary (#009AEE),
+   vibrant-but-sparse accents, minimal glow, 7:1 text contrast. */
+
+.tv2-scope {
+  /* near-black blue-cast canvas */
+  --background: 224 45% 2.5%;
+  /* floating island surface */
+  --card: 223 30% 5.5%;
+  --popover: 223 30% 7%;
+  --secondary: 223 24% 9.5%;
+  --muted: 223 20% 12%;
+  --muted-foreground: 217 16% 58%;
+  --border: 222 22% 12.5%;
+  --input: 222 22% 14%;
+  /* PropSim brand blue replaces the legacy teal */
+  --primary: 199 100% 47%;
+  --ring: 199 100% 47%;
+
+  background:
+    radial-gradient(ellipse 60% 40% at 70% -10%, hsla(199, 100%, 47%, 0.07), transparent 60%),
+    hsl(var(--background));
+}
+
+/* ── Floating island panels ───────────────────────────────── */
+.tv2-island {
+  border-radius: 0.875rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  overflow: hidden;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 18px 48px -28px rgba(0, 154, 238, 0.14),
+    0 8px 24px -16px rgba(0, 0, 0, 0.7);
+}
+
+/* ── Command bar ──────────────────────────────────────────── */
+.tv2-commandbar {
+  border-radius: 0.875rem;
+  border: 1px solid hsl(var(--border));
+  background: linear-gradient(180deg, hsla(223, 30%, 8%, 0.9), hsla(223, 30%, 5.5%, 0.9));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.tv2-stat-label {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.tv2-stat-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+/* P&L breathing dot */
+@keyframes tv2-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+.tv2-pulse {
+  animation: tv2-pulse 2s ease-in-out infinite;
+}
+
+/* ── Risk meter ───────────────────────────────────────────── */
+.tv2-meter {
+  height: 0.375rem;
+  border-radius: 9999px;
+  background: hsl(var(--muted));
+  overflow: hidden;
+}
+.tv2-meter-fill {
+  height: 100%;
+  border-radius: 9999px;
+  transition:
+    width 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 0.3s ease;
+}
+
+/* ── Brand chip ───────────────────────────────────────────── */
+.tv2-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #7dd3fc;
+  border: 1px solid rgba(0, 154, 238, 0.35);
+  background: rgba(0, 154, 238, 0.1);
+}
+
+/* ── Micro-interactions ───────────────────────────────────── */
+.tv2-island,
+.tv2-commandbar {
+  transition: border-color 0.3s ease;
+}
+.tv2-island:focus-within {
+  border-color: hsla(199, 100%, 47%, 0.35);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv2-pulse {
+    animation: none;
+  }
+  .tv2-meter-fill {
+    transition: none;
+  }
+}

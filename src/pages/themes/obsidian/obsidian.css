@@ -1,0 +1,135 @@
+/* ══════════════════════════════════════════════════════════════
+   Obsidian — graphite pro-exchange terminal theme.
+   Deep slate surfaces, electric-blue accent, compact data
+   density, hairline borders, restrained glow.
+   ══════════════════════════════════════════════════════════════ */
+
+html.obsidian {
+  --background: 215 28% 6%;
+  --foreground: 213 22% 88%;
+  --card: 214 25% 9%;
+  --card-foreground: 213 22% 88%;
+  --primary: 213 94% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 215 22% 13%;
+  --secondary-foreground: 213 22% 88%;
+  --muted: 215 20% 15%;
+  --muted-foreground: 215 14% 55%;
+  --accent: 213 94% 60%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 350 89% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 215 18% 16%;
+  --input: 215 22% 11%;
+  --ring: 213 94% 60%;
+  --radius: 0.625rem;
+  --success: 152 72% 46%;
+  --warning: 38 92% 50%;
+  --buy: 152 72% 46%;
+  --sell: 350 89% 60%;
+  --panel-header: 215 25% 8%;
+  --glow: 213 94% 60%;
+}
+
+.ob-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 500px at 70% -200px, hsl(213 94% 60% / 0.07), transparent 60%),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.ob-panel {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 10px;
+  transition: border-color 0.25s ease;
+}
+
+.ob-panel:hover {
+  border-color: hsl(215 18% 22%);
+}
+
+.ob-strip {
+  background: hsl(var(--card) / 0.9);
+  border-bottom: 1px solid hsl(var(--border));
+  backdrop-filter: blur(8px);
+}
+
+.ob-label {
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+.ob-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 8px;
+  background: hsl(var(--secondary) / 0.6);
+}
+
+.ob-tab {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  color: hsl(var(--muted-foreground));
+  transition:
+    color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.ob-tab:hover {
+  color: hsl(var(--foreground));
+}
+
+.ob-tab[data-active="true"] {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.ob-pos {
+  color: hsl(var(--buy));
+}
+.ob-neg {
+  color: hsl(var(--sell));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ob-reveal {
+    animation: ob-reveal 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  @keyframes ob-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .ob-live-dot {
+    animation: ob-blink 2s ease-in-out infinite;
+  }
+  @keyframes ob-blink {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.35;
+    }
+  }
+}

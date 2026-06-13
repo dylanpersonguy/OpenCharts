@@ -1,0 +1,234 @@
+/* ══════════════════════════════════════════════════════════════
+   Vanta — luxury near-black bento dashboard.
+   Champagne-gold accent, serif display numerals, spotlight
+   tiles, draw-in equity chart, radial risk gauges.
+   ══════════════════════════════════════════════════════════════ */
+
+html.vanta {
+  --background: 40 10% 3%;
+  --foreground: 42 20% 90%;
+  --card: 40 12% 6%;
+  --card-foreground: 42 20% 90%;
+  --primary: 42 64% 65%;
+  --primary-foreground: 40 30% 8%;
+  --secondary: 40 10% 10%;
+  --secondary-foreground: 42 20% 90%;
+  --muted: 40 9% 12%;
+  --muted-foreground: 40 10% 52%;
+  --accent: 42 64% 65%;
+  --accent-foreground: 40 30% 8%;
+  --destructive: 0 72% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 40 14% 13%;
+  --input: 40 12% 8%;
+  --ring: 42 64% 65%;
+  --radius: 1.25rem;
+  --success: 152 65% 45%;
+  --warning: 38 92% 55%;
+  --buy: 152 65% 45%;
+  --sell: 0 72% 55%;
+  --panel-header: 40 12% 5%;
+  --glow: 42 64% 65%;
+}
+
+.vt-page {
+  height: 100%;
+  overflow-y: auto;
+  background:
+    radial-gradient(1000px 480px at 80% -180px, hsl(42 64% 65% / 0.06), transparent 60%),
+    hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-variant-numeric: tabular-nums;
+}
+
+.vt-serif {
+  font-family: "Playfair Display", Georgia, "Times New Roman", serif;
+  letter-spacing: -0.01em;
+}
+
+.vt-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+}
+
+/* ── Spotlight bento tile ──────────────────────────────────── */
+
+.vt-tile {
+  position: relative;
+  overflow: hidden;
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: 20px;
+  transition:
+    border-color 0.3s ease,
+    transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.vt-tile::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.35s ease;
+  background: radial-gradient(
+    420px circle at var(--mx, 50%) var(--my, 50%),
+    hsl(42 64% 65% / 0.08),
+    transparent 65%
+  );
+}
+
+.vt-tile:hover {
+  border-color: hsl(42 40% 24%);
+}
+
+.vt-tile:hover::before {
+  opacity: 1;
+}
+
+.vt-tile-inner {
+  position: relative;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.vt-gold {
+  color: hsl(var(--accent));
+}
+.vt-pos {
+  color: hsl(var(--buy));
+}
+.vt-neg {
+  color: hsl(var(--sell));
+}
+
+.vt-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--secondary) / 0.7);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.vt-row {
+  transition: background-color 0.2s ease;
+}
+
+.vt-row:hover {
+  background: hsl(var(--muted) / 0.5);
+}
+
+.vt-row[data-active="true"] {
+  background: hsl(42 64% 65% / 0.07);
+  box-shadow: inset 3px 0 0 hsl(var(--accent));
+}
+
+/* ── Hairline progress with milestone ticks ────────────────── */
+
+.vt-meter {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background: hsl(var(--muted));
+  overflow: hidden;
+}
+
+.vt-meter-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, hsl(42 50% 45%), hsl(var(--accent)));
+  transition: width 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ── Motion (reduced-motion gated) ─────────────────────────── */
+
+@media (prefers-reduced-motion: no-preference) {
+  .vt-reveal {
+    animation: vt-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .vt-reveal-2 {
+    animation: vt-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+  }
+  .vt-reveal-3 {
+    animation: vt-reveal 0.6s cubic-bezier(0.16, 1, 0.3, 1) 0.16s both;
+  }
+  @keyframes vt-reveal {
+    from {
+      opacity: 0;
+      transform: translateY(10px) scale(0.99);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .vt-draw {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: vt-draw 1.4s cubic-bezier(0.16, 1, 0.3, 1) 0.2s forwards;
+  }
+  @keyframes vt-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .vt-area {
+    opacity: 0;
+    animation: vt-fade 0.8s ease 1s forwards;
+  }
+  @keyframes vt-fade {
+    to {
+      opacity: 1;
+    }
+  }
+
+  .vt-gauge-arc {
+    transition: stroke-dashoffset 1s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .vt-shimmer {
+    background: linear-gradient(
+      100deg,
+      hsl(var(--accent)) 40%,
+      hsl(48 90% 82%) 50%,
+      hsl(var(--accent)) 60%
+    );
+    background-size: 200% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    animation: vt-shimmer 5s ease-in-out infinite;
+  }
+  @keyframes vt-shimmer {
+    0%,
+    70%,
+    100% {
+      background-position: 100% 0;
+    }
+    80%,
+    90% {
+      background-position: 0 0;
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vt-area {
+    opacity: 1;
+  }
+  .vt-shimmer {
+    color: hsl(var(--accent));
+  }
+}
