@@ -1,0 +1,321 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Deep dark trading theme — inspired by E8 Markets aesthetic */
+  :root {
+    --background: 220 20% 4.5%;
+    --foreground: 210 20% 88%;
+    --card: 220 18% 7%;
+    --card-foreground: 210 20% 88%;
+    --primary: 168 80% 48%;
+    --primary-foreground: 220 20% 4.5%;
+    --secondary: 220 16% 11%;
+    --secondary-foreground: 210 20% 88%;
+    --muted: 220 14% 15%;
+    --muted-foreground: 215 12% 48%;
+    --accent: 168 80% 48%;
+    --accent-foreground: 220 20% 4.5%;
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 220 14% 14%;
+    --input: 220 16% 11%;
+    --ring: 168 80% 48%;
+    --radius: 0.5rem;
+    --success: 160 84% 44%;
+    --warning: 38 92% 50%;
+    --buy: 160 84% 44%;
+    --sell: 0 72% 56%;
+    --panel-header: 220 16% 9%;
+    --glow: 168 80% 48%;
+  }
+
+  /* Light theme */
+  .light {
+    --background: 0 0% 98%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --primary: 168 80% 38%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 93%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 168 80% 38%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 168 80% 38%;
+    --radius: 0.5rem;
+    --success: 160 84% 35%;
+    --warning: 38 92% 45%;
+    --buy: 160 84% 35%;
+    --sell: 0 72% 51%;
+    --panel-header: 210 40% 96%;
+    --glow: 168 80% 38%;
+  }
+
+  * {
+    @apply border-border;
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  a {
+    @apply text-accent no-underline;
+  }
+  button {
+    cursor: pointer;
+    font: inherit;
+  }
+
+  input,
+  select,
+  textarea {
+    @apply bg-input text-foreground border border-border rounded-md px-2.5 py-1.5 outline-none transition-colors duration-150;
+    font: inherit;
+  }
+  input:focus,
+  select:focus {
+    @apply border-accent/60 ring-1 ring-accent/30;
+  }
+
+  table {
+    @apply w-full border-collapse;
+  }
+  th,
+  td {
+    @apply px-2.5 py-1.5 text-left border-b border-border/50;
+  }
+  th {
+    @apply text-muted-foreground font-medium text-[11px] uppercase tracking-wider;
+  }
+}
+
+/* ─── Custom Scrollbar ───────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-border/60 rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/40;
+}
+
+/* ─── Glow Effects ───────────────────────────────────────── */
+.glow-buy {
+  text-shadow: 0 0 8px hsl(var(--buy) / 0.4);
+}
+.glow-sell {
+  text-shadow: 0 0 8px hsl(var(--sell) / 0.4);
+}
+.glow-accent {
+  text-shadow: 0 0 8px hsl(var(--accent) / 0.4);
+}
+
+/* ─── Stat Cards ─────────────────────────────────────────── */
+.stat-value {
+  @apply font-mono font-semibold tabular-nums tracking-tight;
+}
+.stat-label {
+  @apply text-[10px] text-muted-foreground uppercase tracking-wider font-medium;
+}
+
+/* ─── Panel Styles ───────────────────────────────────────── */
+.panel-glass {
+  @apply bg-card/80 backdrop-blur-sm border border-border/40 rounded-lg;
+}
+
+/* ─── Elegant tab styles ─────────────────────────────────── */
+.tab-active {
+  @apply text-foreground border-b-2 border-accent;
+}
+.tab-inactive {
+  @apply text-muted-foreground hover:text-foreground/80 border-b-2 border-transparent transition-colors;
+}
+
+/* ─── Legacy compat ──────────────────────────────────────── */
+.pnl-positive {
+  @apply text-success;
+}
+.pnl-negative {
+  @apply text-destructive;
+}
+.pnl-zero {
+  @apply text-muted-foreground;
+}
+.mono {
+  @apply font-mono;
+}
+.text-muted {
+  @apply text-muted-foreground;
+}
+
+/* Legacy buttons */
+.btn {
+  @apply inline-flex items-center gap-1.5 px-3.5 py-1.5 border border-border rounded-md bg-secondary text-foreground text-[13px] transition-all duration-150;
+}
+.btn:hover {
+  @apply bg-muted;
+}
+.btn-primary {
+  @apply bg-accent border-accent text-accent-foreground;
+}
+.btn-primary:hover {
+  @apply opacity-90;
+}
+.btn-buy {
+  @apply bg-buy border-buy text-white;
+}
+.btn-sell {
+  @apply bg-sell border-sell text-white;
+}
+.btn-sm {
+  @apply px-2 py-0.5 text-xs;
+}
+.btn-danger {
+  @apply bg-destructive border-destructive text-destructive-foreground;
+}
+
+/* Legacy panels */
+.panel {
+  @apply bg-card border border-border rounded-lg overflow-hidden;
+}
+.panel-header {
+  @apply flex items-center justify-between px-3 py-2 border-b border-border bg-secondary;
+}
+.panel-header h3 {
+  @apply text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+}
+.panel-body {
+  @apply p-2 overflow-auto;
+}
+
+/* ─── Responsive ─────────────────────────────────────────── */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+  th,
+  td {
+    @apply px-1.5 py-1;
+  }
+  .panel-body {
+    @apply p-1.5;
+  }
+
+  /* Touch-friendly tap targets (#65) */
+  button,
+  a,
+  select,
+  input[type="checkbox"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  input,
+  select,
+  textarea {
+    font-size: 16px !important; /* Prevent iOS zoom on focus */
+  }
+}
+
+/* Safe area for bottom nav on notched devices */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Safe area for headers near the iOS notch / Dynamic Island */
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Mobile card adjustments */
+@media (max-width: 640px) {
+  .max-w-6xl {
+    @apply px-3;
+  }
+}
+
+/* ─── Skeleton animation ─────────────────────────────────── */
+.skeleton {
+  @apply rounded animate-skeleton-pulse bg-muted;
+}
+
+/* ─── Badge pulse for live data ──────────────────────────── */
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+.live-pulse {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ─── Mobile utilities ───────────────────────────────────── */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Safe area for bottom nav on notched devices */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Prevent text selection on touch targets */
+.touch-action-pan-x {
+  touch-action: pan-x;
+}
+.touch-action-pan-y {
+  touch-action: pan-y;
+}
+
+/* Larger touch targets on mobile */
+@media (max-width: 767px) {
+  button,
+  [role="button"],
+  a {
+    min-height: 36px;
+  }
+
+  /* Disable hover effects on touch */
+  @media (hover: none) {
+    .hover\:bg-secondary:active {
+      background: hsl(var(--secondary));
+    }
+  }
+}

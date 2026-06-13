@@ -1,500 +1,259 @@
-<p align="center">
-  <img src="https://img.shields.io/badge/OpenCharts-Financial%20Charting-2962ff?style=for-the-badge&logoColor=white" alt="OpenCharts" height="40"/>
-</p>
+<div align="center">
 
-<h1 align="center">OpenCharts</h1>
-<h3 align="center">The Open Source TradingView Alternative</h3>
+# 📈 OpenCharts
 
-<p align="center">
-  <strong>A free, self-hosted, real-time financial charting platform for traders, developers, and quant teams.</strong>
-</p>
+**An open-source trading terminal that runs entirely in your browser — no backend, no signup, no API keys.**
 
-<p align="center">
-  <a href="#-quick-start"><img src="https://img.shields.io/badge/Get_Started-→-26a69a?style=for-the-badge" alt="Get Started"/></a>
-  <a href="#-features"><img src="https://img.shields.io/badge/Features-↓-2962ff?style=for-the-badge" alt="Features"/></a>
-  <a href="#-contributing"><img src="https://img.shields.io/badge/Contribute-♡-ef5350?style=for-the-badge" alt="Contribute"/></a>
-</p>
+Advanced charting · full drawing-tool suite · watchlist · depth-of-market · order panel · built-in paper-trading engine, seeded with **real** market history.
 
-<p align="center">
-  <img src="https://img.shields.io/github/license/dylanpersonguy/OpenCharts?style=flat-square&color=2962ff" alt="License"/>
-  <img src="https://img.shields.io/github/stars/dylanpersonguy/OpenCharts?style=flat-square&color=26a69a" alt="Stars"/>
-  <img src="https://img.shields.io/github/forks/dylanpersonguy/OpenCharts?style=flat-square&color=787b86" alt="Forks"/>
-  <img src="https://img.shields.io/github/issues/dylanpersonguy/OpenCharts?style=flat-square&color=ef5350" alt="Issues"/>
-  <img src="https://img.shields.io/badge/TypeScript-5.4-3178c6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript"/>
-  <img src="https://img.shields.io/badge/Node.js-20+-339933?style=flat-square&logo=node.js&logoColor=white" alt="Node.js"/>
-  <img src="https://img.shields.io/badge/Next.js-14-000000?style=flat-square&logo=next.js&logoColor=white" alt="Next.js"/>
-  <img src="https://img.shields.io/badge/PostgreSQL-16-336791?style=flat-square&logo=postgresql&logoColor=white" alt="PostgreSQL"/>
-  <img src="https://img.shields.io/badge/Redis-7-dc382d?style=flat-square&logo=redis&logoColor=white" alt="Redis"/>
-  <img src="https://img.shields.io/badge/PRs-Welcome-26a69a?style=flat-square" alt="PRs Welcome"/>
-</p>
+![OpenCharts trading terminal](docs/screenshot.png)
+
+</div>
 
 ---
 
-## Why OpenCharts?
+## Table of contents
 
-TradingView is powerful — but it's closed-source, expensive, and you don't own your data. **OpenCharts** gives you the same professional-grade charting experience with full control:
-
-- **100% Open Source** — MIT licensed, fork it, extend it, own it
-- **Self-Hosted** — Your data stays on your infrastructure
-- **Custom Chart Engine** — Pure HTML Canvas 2D rendering, no third-party chart libraries
-- **Real-Time Streaming** — WebSocket-powered live market data
-- **Multi-Exchange** — Crypto (Binance, Coinbase, Kraken), stocks (Alpaca), forex
-- **PineScript Transpiler** — Convert Pine Script to TypeScript or Python
-- **Plugin Architecture** — Extend with custom indicators and data sources
-- **Production Ready** — Docker support, rate limiting, JWT auth, OpenAPI spec
-
-Whether you're a retail trader who wants a free alternative, a quant building custom tooling, or a fintech startup that needs embeddable charts — OpenCharts is your foundation.
+- [What is OpenCharts?](#what-is-opencharts)
+- [Features](#features)
+- [Quick start](#quick-start)
+- [How it works](#how-it-works)
+- [Project structure](#project-structure)
+- [Refreshing the bundled market data](#refreshing-the-bundled-market-data)
+- [Bring your own data / backend](#bring-your-own-data--backend)
+- [Adding instruments](#adding-instruments)
+- [Scripts](#scripts)
+- [Tech stack](#tech-stack)
+- [Known limitations](#known-limitations)
+- [Contributing](#contributing)
+- [Acknowledgements](#acknowledgements)
+- [License](#license)
 
 ---
+
+## What is OpenCharts?
+
+OpenCharts is a self-contained, professional-grade **trading terminal UI**. Open it
+and you land straight in a live-feeling terminal: a candlestick chart with a full
+drawing toolbar, a watchlist, a depth-of-market ladder, and an order ticket — all
+wired to an **in-browser paper-trading engine**.
+
+There is **no server to run**. The demo session is seeded with *genuine* historical
+OHLC data (pulled from a public exchange API, never synthetically generated) and a
+tick stream is replayed forward from the present, so the chart and prices move like
+a real feed while you place and manage paper trades.
+
+It's ideal as:
+
+- A **standalone charting / paper-trading app** you can host anywhere static.
+- A **reference UI** you can point at your own market-data and trading backend
+  (the data layer is cleanly isolated — see [Bring your own data](#bring-your-own-data--backend)).
+- A **learning sandbox** for charting, technical drawing, and order management.
 
 ## Features
 
-### Professional Charting Engine
+### 📊 Charting
+- Candlestick chart powered by [`lightweight-charts`](https://github.com/tradingview/lightweight-charts).
+- Timeframes from **1m → 1w** (1m, 5m, 15m, 30m, 1h, 4h, 1d, 1w).
+- Volume histogram, OHLC legend, live bid/ask price lines, crosshair, and countdown.
+- Session highlighting and session-break separators.
+- Per-symbol chart preferences and saveable **chart templates** (persisted locally).
 
-Built from scratch using **pure HTML Canvas 2D** — no external chart library dependencies.
+### ✏️ Drawing tools
+- Draggable, hideable drawing toolbar with trend lines, rays, horizontal/vertical
+  lines, rectangles, and text.
+- Per-object styling (color, width, line style, labels) with a TradingView-style
+  text settings editor.
+- An **object tree** panel to select, toggle, and delete drawings.
+- Drawings persist per symbol in `localStorage` and survive reloads.
 
-| Feature | Details |
-|---------|---------|
-| **Chart Types** | Candlestick, Line, Area with volume histogram |
-| **Timeframes** | 1s, 5s, 15s, 1m, 5m, 15m, 1h, 4h, 1D, 1W |
-| **Interactions** | Mouse pan/scroll, scroll-wheel zoom, touch pan, pinch-to-zoom |
-| **Crosshair** | Real-time price and time tracking with axis labels |
-| **Auto-Scale** | Dynamic Y-axis scaling with smart price grid |
-| **Server Aggregation** | On-the-fly bar aggregation from finest available resolution |
-| **Mobile Ready** | Responsive layout with touch gesture support |
+### 📋 Watchlist · DOM · order panel
+- **Watchlist** with live prices across all instruments.
+- **Depth-of-market (DOM)** ladder.
+- **Order panel**: market / limit / stop tickets with volume presets, take-profit
+  and stop-loss, plus a one-click trade mode and an order confirmation dialog.
+- **Positions / Orders / Trade History** tabs with modify, close, and close-all.
 
-### 20+ Technical Indicators
+### 💵 Built-in paper trading
+- Orders fill against an in-browser engine at the latest replayed price.
+- Positions are **marked-to-market live** on every tick, with running P&L.
+- Stop-loss / take-profit are evaluated automatically and close positions when hit.
+- Account equity, balance, used/free margin update in real time.
 
-<table>
-<tr>
-<td>
+### 🛰️ Real market data, no backend
+- Demo OHLC is **real** historical data bundled at build time (no random walks).
+- A replay feed streams ticks forward from "now" so the terminal feels live.
+- Everything runs client-side — deploy it as a static site.
 
-**Overlays**
-- SMA (Simple Moving Average)
-- EMA (Exponential Moving Average)
-- WMA (Weighted Moving Average)
-- DEMA (Double EMA)
-- TEMA (Triple EMA)
-- VWAP
-- Bollinger Bands
-- Ichimoku Cloud
-- Parabolic SAR
+## Quick start
 
-</td>
-<td>
-
-**Oscillators**
-- RSI (Relative Strength Index)
-- MACD
-- Stochastic
-- Stochastic RSI
-- Williams %R
-- CCI (Commodity Channel Index)
-- ROC (Rate of Change)
-- MFI (Money Flow Index)
-- ATR (Average True Range)
-- ADX (Average Directional Index)
-- OBV (On-Balance Volume)
-
-</td>
-</tr>
-</table>
-
-### Drawing Tools
-
-- **Horizontal Lines** — Support/resistance levels
-- **Trend Lines** — Multi-point trend analysis
-- **Rectangles** — Zone highlighting
-- **Fibonacci Retracement** — Key Fib levels
-- **Text Annotations** — On-chart labels
-- All drawings persist to database and are fully editable
-
-### Real-Time Streaming
-
-- **WebSocket** primary transport with automatic reconnection
-- **Server-Sent Events (SSE)** fallback for restricted environments
-- **Redis Pub/Sub** fanout for horizontal scaling
-- Live bar updates before candle close
-
-### Multi-Exchange and Multi-Asset
-
-| Asset Class | Provider | Markets |
-|-------------|----------|---------|
-| **Crypto** | CCXT (Binance, Coinbase, Kraken) | BTC, ETH, SOL, 100+ pairs |
-| **Crypto** | Alpaca Crypto | Major pairs |
-| **US Stocks** | Alpaca Markets | Full US equity coverage |
-| **Forex** | Configurable | EUR/USD, GBP/USD, USD/JPY + more |
-| **Multi-Exchange** | Aggregation Engine | Combined order books across exchanges |
-
-### PineScript Transpiler
-
-Convert TradingView Pine Script into executable code:
-
-```pine
-//@version=5
-indicator("My RSI Strategy", overlay=false)
-length = input(14, "RSI Length")
-src = close
-rsi_val = ta.rsi(src, length)
-plot(rsi_val, "RSI", color.blue)
-hline(70, "Overbought")
-hline(30, "Oversold")
-```
-
-**Output targets:**
-- **TypeScript** — Drop into your Node.js/browser projects
-- **Python** — Ready for Jupyter notebooks and backtesting frameworks
-
-Architecture: Lexer, Parser, AST, Code Generator
-
-### Alerts and Webhooks
-
-- Price alerts: crosses_above, crosses_below, greater_than, less_than
-- Webhook delivery to any URL on trigger
-- Background processing via **BullMQ** job queues
-
-### Chart Snapshots and Sharing
-
-- Capture chart state (symbol, resolution, indicators, drawings)
-- Generate unique share links
-- Anonymous access via share code
-
-### Plugin System
-
-- Register custom indicators
-- Enable/disable plugins at runtime
-- Extensible registry architecture
-
-### Economic Calendar
-
-- Macro event tracking by country and impact level
-- Sidebar integration alongside price charts
-
-### Theming Engine
-
-- Dark theme optimized for trading (default)
-- CSS variable-based theming system
-- Customizable color palette
-
-### Authentication and Security
-
-- JWT-based authentication
-- bcrypt password hashing (12 rounds)
-- Helmet HTTP security headers
-- Per-endpoint rate limiting
-- Zod request validation
-
----
-
-## Architecture
-
-```
-+----------------------------------------------------------+
-|                    Browser (Next.js)                      |
-|  +----------+ +----------+ +----------+ +------------+   |
-|  |  Canvas   | | Toolbar  | | Sidebar  | |  Zustand   |  |
-|  |  Engine   | |Components| | Panels   | |   Store    |  |
-|  +-----+----+ +----------+ +----------+ +------------+   |
-|        |              REST API + WebSocket                |
-+--------+-------------------------------------------------+
-         |
-+--------+-------------------------------------------------+
-|        v          Express Server (Node.js)                |
-|  +---------+ +-----------+ +----------+ +------------+   |
-|  |  Routes  | | Services  | |   WS     | |  BullMQ    |  |
-|  |  (REST)  | |(Indicators| |  Server  | |   Queues   |  |
-|  |          | | Providers)| |          | |            |  |
-|  +----+----+ +-----+-----+ +----+-----+ +-----+------+  |
-|       |            |            |              |          |
-|  +----+------------+------------+--------------+------+   |
-|  |              Drizzle ORM + Redis PubSub            |   |
-|  +--------+-------------------------+------------ ---+   |
-+-----------|-------------------------|--------------------+
-            |                         |
-     +------+------+          +-------+-------+
-     | PostgreSQL  |          |    Redis      |
-     |   (Data)    |          | (Cache/PubSub)|
-     +-------------+          +---------------+
-```
-
----
-
-## Project Structure
-
-```
-opencharts/
-├── apps/
-│   ├── server/                    # Express.js backend (port 4000)
-│   │   ├── src/
-│   │   │   ├── routes/            # REST API endpoints
-│   │   │   ├── services/          # Business logic & data providers
-│   │   │   ├── middleware/        # Auth, rate limiting
-│   │   │   ├── ws/                # WebSocket server
-│   │   │   └── db/                # Drizzle ORM schema, migrations, seed
-│   │   ├── Dockerfile
-│   │   └── openapi.json           # OpenAPI 3.0 specification
-│   │
-│   └── web/                       # Next.js 14 frontend (port 3000)
-│       ├── src/
-│       │   ├── lib/chart/         # Custom Canvas 2D chart engine
-│       │   ├── components/        # React components (toolbar, sidebar, chart)
-│       │   ├── hooks/             # useWebSocket, useSSE, useMediaQuery
-│       │   └── store/             # Zustand state management
-│       └── Dockerfile
-│
-├── packages/
-│   ├── common/                    # Shared TypeScript types & constants
-│   └── pine-transpiler/           # PineScript -> TypeScript/Python compiler
-│       └── src/
-│           ├── lexer.ts           # Tokenization
-│           ├── parser.ts          # Syntax analysis
-│           ├── ast.ts             # Abstract Syntax Tree
-│           └── generators/        # TypeScript & Python code generators
-│
-├── e2e/                           # Playwright end-to-end tests
-├── docker-compose.yml             # Full-stack Docker orchestration
-├── turbo.json                     # Turborepo build configuration
-└── vitest.config.ts               # Unit test configuration
-```
-
----
-
-## Quick Start
-
-### Prerequisites
-
-- **Node.js** 20 or newer
-- **PostgreSQL** 16
-- **Redis** 7
-- **npm** 10 or newer
-
-### 1. Clone and Install
+> Requires **Node 20+**.
 
 ```bash
-git clone https://github.com/dylanpersonguy/OpenCharts.git
-cd OpenCharts
 npm install
-```
-
-### 2. Set Up Database
-
-```bash
-# Create database and user
-createdb opencharts
-createuser opencharts -P  # password: opencharts
-
-# Configure environment
-cp apps/server/.env.example apps/server/.env
-# Edit .env with your DATABASE_URL
-
-# Run migrations and seed demo data
-npm run db:migrate
-npm run db:seed
-```
-
-### 3. Start Development
-
-```bash
-# Start all services (server + web)
 npm run dev
-
-# Or start individually:
-cd apps/server && npm run dev   # Backend on :4000
-cd apps/web && npm run dev      # Frontend on :3000
 ```
 
-### 4. Open in Browser
+Open the printed local URL (e.g. `http://localhost:5173`). The app boots straight
+into a demo session with a funded paper-trading account — pick a symbol from the
+watchlist, set a size in the order panel, and go long or short.
 
-Navigate to **http://localhost:3000**
-
-> **Demo credentials:** `demo@opencharts.dev` / `demo1234`
-
-### Docker (Alternative)
+To build for production:
 
 ```bash
-docker compose up -d
-# PostgreSQL :5432 | Redis :6379 | Server :4000 | Web :3000
+npm run build      # outputs to dist/
+npm run preview    # serve the production build locally
 ```
 
----
+## How it works
 
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 14, React 18, Zustand, Radix UI, Tailwind CSS, Lucide Icons |
-| Chart Engine | Custom HTML Canvas 2D (zero dependencies) |
-| Backend | Express 4, Node.js 20, WebSocket (ws), Server-Sent Events |
-| Database | PostgreSQL 16, Drizzle ORM, Redis 7 |
-| Market Data | CCXT (100+ exchanges), Alpaca Markets, Simulated Provider |
-| Analysis | technicalindicators (20+ indicators), PineScript Transpiler |
-| Job Queue | BullMQ (Redis-backed background jobs) |
-| Auth | JWT, bcryptjs, Helmet, rate-limiter-flexible |
-| Validation | Zod schema validation |
-| Logging | Pino (structured JSON logging) |
-| Build | Turborepo, TypeScript 5.4 |
-| Testing | Vitest (unit), Playwright (E2E) |
-| Infra | Docker, Docker Compose, Multi-stage builds |
-
----
-
-## API Reference
-
-OpenCharts ships with a full **OpenAPI 3.0** specification at `/api/openapi.json`.
-
-<details>
-<summary><strong>Core Endpoints</strong></summary>
+OpenCharts keeps the entire UI **backend-agnostic**. The terminal talks to two
+service modules — a REST-shaped `api` and a streaming `wsClient` — and never cares
+where the data comes from. In this repo, both are implemented by a small in-browser
+**demo layer**:
 
 ```
-Auth
-  POST   /api/auth/register          Register new account
-  POST   /api/auth/login             Login, returns JWT token
-  GET    /api/auth/me                Current user profile
-
-Market Data
-  GET    /api/symbols                List all symbols
-  GET    /api/symbols/search?q=      Search symbols
-  GET    /api/bars/:symbol/:res      Historical OHLCV bars
-  POST   /api/bars/:symbol/:res/indicators   Compute indicators
-
-Trading Tools
-  POST   /api/alerts                 Create price alert
-  GET    /api/calendar               Economic calendar events
-  POST   /api/transpile              Transpile PineScript
-
-Workspace
-  GET    /api/watchlists             User watchlists
-  GET    /api/layouts                Saved chart layouts
-  POST   /api/drawings              Create drawing
-  POST   /api/snapshots             Create chart snapshot
-  GET    /api/snapshots/:code       Get shared snapshot
-
-System
-  GET    /health                     Health check
-  WS     /ws                        WebSocket streaming
-  GET    /api/sse/subscribe          SSE fallback stream
+                ┌─────────────────────────────────────────────┐
+                │                Terminal UI                   │
+                │  ChartPanel · OrderPanel · DOM · Watchlist    │
+                └───────────────┬───────────────┬──────────────┘
+                                │ api.*          │ wsClient.subscribe()
+                ┌───────────────▼───────┐ ┌──────▼───────────────┐
+                │   services/api.ts      │ │   services/ws.ts      │
+                │  (REST-shaped facade)  │ │  (streaming client)   │
+                └───────────────┬───────┘ └──────┬───────────────┘
+                                │                 │
+                ┌───────────────▼─────────────────▼───────────────┐
+                │                services/demo/                    │
+                │  engine.ts   paper-trading (positions, P&L, SL/TP)│
+                │  feed.ts     replays real ticks → bus → store     │
+                │  candles.ts  serves bundled OHLC (shifted to now) │
+                │  instruments.ts / data/  real OHLC + symbol specs │
+                └──────────────────────────────────────────────────┘
 ```
 
-</details>
+- **`services/demo/engine.ts`** — the paper-trading engine and single source of
+  truth for the account, positions, and orders. It marks positions to market and
+  publishes the same position/order/equity events the UI already consumed.
+- **`services/demo/feed.ts`** — replays the bundled real 1-minute closes for every
+  symbol as a forward-moving tick stream at wall-clock time.
+- **`services/demo/candles.ts`** — serves the bundled history, time-shifted so the
+  most recent bar aligns to "now" (values stay real; only the timeline is
+  normalized so it looks live).
+- **`services/api.ts` / `services/ws.ts`** — thin shims that expose the exact REST
+  + pub/sub contracts the components use, backed by the demo layer. Swapping these
+  two files is all it takes to point OpenCharts at a real backend.
 
----
+Because the data layer sits behind a stable interface, **no UI component had to
+change** to run without a server.
 
-## Testing
+## Project structure
+
+```
+src/
+├─ App.tsx                  # boots a demo session, renders the terminal
+├─ main.tsx                 # React entry, providers, MarketDataBridge
+├─ pages/
+│  ├─ TradingPage.tsx       # the full terminal layout
+│  └─ trading/              # chart, order panel, DOM, watchlist, drawing tools…
+├─ lib/
+│  ├─ chart-plugins/        # lightweight-charts plugins actually used by the chart
+│  │  ├─ drawing-tools/      #   trend lines, rays, rectangles, text, object tree
+│  │  ├─ delta-tooltip/ tooltip/ highlight-bar-crosshair/
+│  │  └─ session-breaks/ session-highlighting/ bands-indicator/
+│  ├─ indicators.ts         # indicator definitions
+│  └─ utils.ts
+├─ components/              # shared UI (order/position dialogs, ui primitives…)
+├─ hooks/                   # chart drawings, preferences, indicators…
+├─ services/
+│  ├─ api.ts                # REST-shaped facade (demo-backed)
+│  ├─ ws.ts                 # streaming client (demo-backed)
+│  ├─ store.tsx             # zustand stores (auth + trading state)
+│  ├─ schemas.ts            # zod schemas / shared types
+│  └─ demo/                 # engine, feed, candles, instruments, bundled data
+└─ styles/
+scripts/
+└─ fetch-demo-data.mjs      # refresh the bundled real OHLC
+```
+
+## Refreshing the bundled market data
+
+The demo OHLC lives in `src/services/demo/data/` as JSON and is fetched from the
+public **Binance klines** endpoint (no API key required):
 
 ```bash
-# Unit tests (Vitest)
-npm test                     # All packages
-cd apps/server && npm test   # Server tests
-cd packages/pine-transpiler && npm test  # Transpiler tests
-
-# End-to-end tests (Playwright)
-npx playwright test          # Requires running dev servers
+node scripts/fetch-demo-data.mjs
 ```
 
-**51 tests** across server logic, indicator calculations, candle aggregation, and PineScript transpilation (lexer, parser, code generation).
+This re-pulls 1000 bars per symbol across every timeframe and rewrites the bundled
+files. The data is genuine market history — OpenCharts never ships synthetic candles.
 
----
+## Bring your own data / backend
+
+To connect OpenCharts to real (or your own simulated) data, implement two files
+against your APIs — the rest of the app is untouched:
+
+1. **`src/services/api.ts`** — the request/response methods the UI calls
+   (`getSymbols`, `getCandles`, `placeOrder`, `getPositions`, `closePosition`, …).
+   The expected shapes are defined in `src/services/schemas.ts`.
+2. **`src/services/ws.ts`** — a client exposing
+   `connect` / `subscribe(channel, handler)` / `subscribeAccounts` / `onStateChange`.
+   Publish `MarketTick`, `CandleUpdate`, `Position*`, `Order*`, and `EquityUpdated`
+   events on the `market-data` / `positions` / `orders` / `account` channels.
+
+`src/components/MarketDataBridge.tsx` shows exactly which events the UI consumes.
+
+## Adding instruments
+
+Demo instruments are defined in `src/services/demo/instruments.ts`. To add one:
+
+1. Add a `Symbol` entry (name, tick size, contract size, etc.).
+2. Add its trading pair to the `SYMBOLS` map in `scripts/fetch-demo-data.mjs`.
+3. Run `node scripts/fetch-demo-data.mjs` to fetch and bundle its history.
+
+## Scripts
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the Vite dev server |
+| `npm run build` | Production build to `dist/` |
+| `npm run preview` | Preview the production build |
+| `npm run typecheck` | Type-check the project with `tsc` |
+| `npm run test` | Run the unit test suite (Vitest) |
+| `npm run test:watch` | Run tests in watch mode |
+| `node scripts/fetch-demo-data.mjs` | Refresh bundled real OHLC |
+
+## Tech stack
+
+- **React 19** + **TypeScript** + **Vite 6**
+- **lightweight-charts** (+ custom plugins) for the chart engine
+- **Zustand** for state, **TanStack Query** for data caching
+- **Tailwind CSS** + **Radix UI** primitives
+- **Zod** for schema validation
+- **Vitest** + **Testing Library** for tests
+
+## Known limitations
+
+- **Demo state is ephemeral** — positions, orders, and account balance reset on
+  reload (chart drawings and templates persist via `localStorage`).
+- **Timeline is normalized** — bundled history is shifted so the latest bar is
+  "now". OHLC values are real; the timestamps are remapped to feel live.
+- **Crypto-only demo symbols** out of the box (the bundled data source is Binance).
+  Wire your own adapter for FX, futures, or equities.
+- The production `build` runs Vite only; run `npm run typecheck` separately for
+  full type checking.
 
 ## Contributing
 
-**OpenCharts is built by traders, for traders.** We believe professional-grade charting and market analysis tools should be free and open to everyone — not locked behind $60/month paywalls.
+Issues and pull requests are welcome. Good first contributions: new chart
+indicators, additional drawing tools, a persistence layer for the paper account,
+or data adapters for other exchanges/brokers.
 
-### We need your help!
+## Acknowledgements
 
-Whether you are a **trader** with feature ideas, a **developer** who wants to build, or a **designer** who can improve the UX — there is a place for you here.
-
-#### Ways to Contribute
-
-| Area | Examples |
-|------|----------|
-| **Bug Reports** | Found a rendering glitch? Data issue? Open an issue |
-| **Feature Requests** | New indicator? Drawing tool? Exchange integration? Tell us |
-| **Code** | Pick up an issue, submit a PR, improve test coverage |
-| **Indicators** | Implement new technical indicators or improve existing ones |
-| **Exchange Integrations** | Add support for more exchanges via CCXT or custom providers |
-| **PineScript** | Expand the transpiler with more built-in functions |
-| **Documentation** | Improve docs, add tutorials, write API guides |
-| **Design** | UI/UX improvements, additional themes, mobile polish |
-| **i18n** | Help translate OpenCharts for global traders |
-
-#### Getting Started
-
-```bash
-# Fork the repo, then:
-git clone https://github.com/YOUR_USERNAME/OpenCharts.git
-cd OpenCharts
-npm install
-npm run dev
-
-# Create a feature branch
-git checkout -b feature/my-awesome-feature
-
-# Make changes, test, commit
-npm test
-git commit -m "feat: add awesome feature"
-git push origin feature/my-awesome-feature
-# Open a Pull Request!
-```
-
-> **First time contributing?** Look for issues labeled `good first issue` — they are designed to help you get familiar with the codebase.
-
----
-
-## Roadmap
-
-- [ ] Backtesting engine with PnL analytics
-- [ ] Multi-chart layouts (2x2, 3x1 grid)
-- [ ] Strategy builder (visual and code)
-- [ ] Paper trading mode
-- [ ] Options chain visualization
-- [ ] Depth of market (DOM)
-- [ ] Replay mode (historical playback)
-- [ ] Community indicator marketplace
-- [ ] Mobile app (React Native)
-- [ ] Advanced order flow tools
-
-**Want to tackle one of these?** Open an issue and let's discuss the implementation!
-
----
-
-## About the Author
-
-Built by **[@dylanpersonguy](https://github.com/dylanpersonguy)** — a full-stack developer and active trader with deep experience building trading systems, algorithmic bots, and financial platforms.
-
-#### Other Trading and Finance Projects
-
-| Project | Stars | Description |
-|---------|-------|-------------|
-| [**Polymarket-Trading-Bot**](https://github.com/dylanpersonguy/Polymarket-Trading-Bot) | 98 | The most advanced open-source Polymarket trading bot — 7 automated strategies (arbitrage, convergence, market making, momentum, AI forecast), whale tracker, real-time dashboard, paper trading. 53K+ lines of TypeScript. |
-| [**Fully-Autonomous-Polymarket-AI-Trading-Bot**](https://github.com/dylanpersonguy/Fully-Autonomous-Polymarket-AI-Trading-Bot) | 37 | Autonomous AI prediction market bot — multi-model ensemble (GPT-4o, Claude, Gemini), automated research, 15+ risk checks, whale tracking, Kelly sizing, 9-tab monitoring dashboard. |
-| [**DecentralChain**](https://github.com/dylanpersonguy/DecentralChain) | — | Blockchain SDK — unified TypeScript monorepo for the DCC ecosystem |
-| [**TradersHub**](https://github.com/dylanpersonguy/tradershub) | — | Multi-tenant SaaS for trading signal distribution — real-time forex/crypto signals, Telegram broadcasting, marketplace |
-
----
+The chart engine and several plugins build on TradingView's open-source
+[`lightweight-charts`](https://github.com/tradingview/lightweight-charts) library.
 
 ## License
 
-[MIT License](LICENSE) — free for personal and commercial use.
-
----
-
-<p align="center">
-  <strong>If OpenCharts saves you money on charting subscriptions, consider giving it a star!</strong>
-  <br/>
-  <sub>Built with love by traders who believe market tools should be free and open.</sub>
-</p>
-
-<!-- SEO Keywords (for GitHub search indexing):
-opencharts, open source tradingview, tradingview alternative, free tradingview,
-open source charting, financial charts, stock charts, crypto charts, forex charts,
-candlestick chart, ohlcv, technical analysis, technical indicators, trading platform,
-self-hosted trading, real-time charts, websocket charts, market data visualization,
-pinescript, pine script transpiler, trading bot, algorithmic trading, quant trading,
-day trading software, swing trading tools, chart analysis, price alerts, watchlist,
-multi-exchange, ccxt, alpaca, binance, coinbase, kraken, stock market, crypto market,
-bollinger bands, rsi, macd, ema, sma, vwap, ichimoku, fibonacci, drawing tools,
-chart snapshots, economic calendar, open source finance, fintech, defi tools,
-react charting, nextjs trading, nodejs trading, typescript trading platform,
-canvas chart engine, html5 charts, web trading platform, browser trading,
-portfolio tracker, market scanner, order book, depth chart
--->
+See [LICENSE](LICENSE).
