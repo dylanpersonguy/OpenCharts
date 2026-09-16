@@ -19,7 +19,9 @@ Advanced charting · full drawing-tool suite · 8 indicators · watchlist · dep
 - [Quick start](#quick-start)
 - [What's real and what's simulated](#whats-real-and-whats-simulated)
 - [How it works](#how-it-works)
+- [Built on Lightweight Charts](#built-on-lightweight-charts)
 - [Project structure](#project-structure)
+- [Building on OpenCharts](#building-on-opencharts)
 - [Refreshing the bundled market data](#refreshing-the-bundled-market-data)
 - [Bring your own data / backend](#bring-your-own-data--backend)
 - [Adding instruments](#adding-instruments)
@@ -56,6 +58,16 @@ It's useful as:
 The codebase was extracted from a closed-source prop-trading platform, so a few
 panels are gated off or stubbed rather than removed — those are called out
 explicitly below rather than advertised as features.
+
+**This is a community project.** The goal is a genuinely open trading terminal
+interface — beautiful charts, a deep drawing toolkit, and enough customizability
+that you can bend it into your own terminal instead of fighting it. It is
+deliberately small, dependency-light and backend-agnostic so that anyone can
+clone it, understand it in an afternoon and extend it. Contributions of every
+size are welcome, from a new indicator or drawing tool to an exchange adapter,
+a theme, a bug report or a docs fix — see
+[Building on OpenCharts](#building-on-opencharts) and
+[Contributing](#contributing).
 
 ## Features
 
@@ -203,6 +215,54 @@ this repo both are implemented by a small in-browser **demo layer**:
 Because the data layer sits behind a stable interface, **no UI component had to
 change** to run without a server.
 
+## Built on Lightweight Charts
+
+OpenCharts is **built on top of TradingView's
+[Lightweight Charts™](https://github.com/tradingview/lightweight-charts)**
+(`lightweight-charts` `^4.2.0`, resolved to 4.2.3 in the lockfile, which in turn
+pulls in `fancy-canvas`, MIT). The chart canvas, series, panes, price scales,
+crosshair and time axis are all
+Lightweight Charts. OpenCharts is the terminal *around* it: the drawing engine
+(`src/lib/chart-plugins/drawing-tools/`), the indicator layer, the series
+primitives, and the panels, order flow and paper engine that surround the chart.
+
+Several plugins under `src/lib/chart-plugins/` (`plugin-base.ts`, `tooltip/`,
+`delta-tooltip/`, `session-highlighting/`, `session-breaks/`,
+`bands-indicator/`, `highlight-bar-crosshair/`, `helpers/`) are adapted from the
+`plugin-examples` shipped in the Lightweight Charts repository, and carry that
+project's license.
+
+### Licensing — read this before you fork or deploy
+
+- **Lightweight Charts is open source under the
+  [Apache License 2.0](https://github.com/tradingview/lightweight-charts/blob/master/LICENSE)** —
+  free for commercial use, but Apache 2.0 comes with conditions.
+- **Attribution is required.** TradingView's terms state that you must add the
+  attribution notice from their `NOTICE` file and a link to
+  <https://www.tradingview.com/> on the page of your site or app that users see.
+  The notice reads:
+
+  ```
+  TradingView Lightweight Charts™
+  Copyright (с) 2025 TradingView, Inc. https://www.tradingview.com/
+  ```
+
+- **OpenCharts satisfies this via the chart's built-in attribution logo.** The
+  `attributionLogo` layout option defaults to `true` and this project never
+  overrides it, so the TradingView link renders on the chart pane. **Do not set
+  `attributionLogo: false` unless you place the notice and link somewhere else
+  users can see.** The option is set (or, here, left alone) where the chart is
+  created in [`src/pages/trading/ChartPanel.tsx`](src/pages/trading/ChartPanel.tsx).
+- **Keep the notice when you redistribute.** Apache 2.0 requires that you pass
+  along the license and notice with any copy or derivative — that includes the
+  adapted plugin code in `src/lib/chart-plugins/`.
+- **OpenCharts' own code is MIT** (see [LICENSE](LICENSE)). MIT and Apache 2.0
+  are compatible, so a build that combines them is fine — you just have to honor
+  Apache 2.0's attribution and notice terms for the chart portion.
+
+None of this is legal advice; if you are shipping commercially, read the license
+yourself.
+
 ## Project structure
 
 ```
@@ -240,6 +300,78 @@ src/
 scripts/
 └─ fetch-demo-data.mjs      # refresh the bundled real OHLC
 ```
+
+## Building on OpenCharts
+
+Everything below is a real extension point in the code, not a roadmap. `npm run
+typecheck` and `npm run test` are the two gates; TypeScript runs in `strict` mode
+with `noUncheckedIndexedAccess` and `noUnusedLocals`, and `@/` resolves to
+`src/`.
+
+### Add an indicator
+
+1. Write the pure calculation in [`src/lib/indicators.ts`](src/lib/indicators.ts)
+   (they take candles and return `{ time, value }[]` — copy `sma` or `rsi`).
+2. Add the type to the `IndicatorType` union and an entry to
+   `INDICATOR_REGISTRY` (`label`, `pane: "overlay" | "below"`, `defaultParams`,
+   `color`). The toolbar menu renders straight from the registry.
+3. Render it in [`src/pages/trading/useIndicators.ts`](src/pages/trading/useIndicators.ts),
+   which creates and disposes the Lightweight Charts series per active indicator.
+
+### Add a drawing tool
+
+The drawing engine is custom and lives in
+[`src/lib/chart-plugins/drawing-tools/`](src/lib/chart-plugins/drawing-tools/).
+A new tool touches five places:
+
+| File | What you add |
+| --- | --- |
+| `pages/trading/constants.ts` | the tool name in the `DrawingTool` union and any new fields on `DrawingLine` |
+| `drawing-tools/manager.ts` | a branch in `buildNew()` that turns anchor points into a `DrawingLine`, plus the single-click list in the pointer handler if it is a one-click tool |
+| `drawing-tools/renderers.ts` | a `case` in the render switch that paints it |
+| `drawing-tools/hit-test.ts` | a `case` so it can be selected and dragged |
+| `pages/trading/DrawingToolRail.tsx` | the rail button, icon and group |
+
+`geometry.ts` holds the shared math, `types.ts` the resolved (pixel-space)
+shapes. Drawings are plain JSON, so anything you add persists automatically.
+
+### Add a chart plugin
+
+Extend `PluginBase` from
+[`src/lib/chart-plugins/plugin-base.ts`](src/lib/chart-plugins/plugin-base.ts)
+(the Lightweight Charts `ISeriesPrimitive` contract: pane views + renderers),
+attach it where the other primitives are attached in `ChartPanel.tsx`, then add
+it to the plugin list in `ChartToolbar.tsx` so it gets a toggle. The existing
+six plugins are the reference implementations.
+
+### Where state lives
+
+- **Zustand** (`services/store.tsx`) — auth and trading state (symbols, accounts,
+  selected symbol, live ticks).
+- **TanStack Query** (`services/queries.ts`) — everything fetched through `api`,
+  keyed by `queryKeys`.
+- **The demo bus** (`services/demo/bus.ts`) — `market-data`, `positions`,
+  `orders` and `account` events; `components/MarketDataBridge.tsx` is the single
+  place they land in React.
+- **`localStorage`** — drawings (`oc_drawings_<SYMBOL>`), chart templates
+  (`oc_chart_templates`), chart and trader preferences (`trader_prefs`, scoped
+  per user id) and the sound mute flag (`tradeSoundMuted`). Chart preference
+  changes broadcast a `chart-preferences-updated` window event rather than
+  going through a store.
+
+### Gotchas worth knowing
+
+- **`api` swallows unknown methods.** [`services/api.ts`](src/services/api.ts)
+  wraps the demo table in a `Proxy` that resolves *any* unimplemented method to
+  `null`. A typo'd method name fails silently instead of throwing — check
+  `services/demo/api.ts` when a call mysteriously returns nothing.
+- **Flags gate whole panels.** `REPLAY_ENABLED` in `pages/trading/constants.ts`
+  hides the replay HUD and scrubber; the journal tab is commented out in
+  `BottomPanel.tsx`; the AI trader is a `null`-returning stub.
+- **React runs in `StrictMode`**, so chart effects mount twice in development —
+  every series, primitive and subscription needs a working cleanup path.
+- **The demo engine is in-memory.** Anything you want to survive a reload has to
+  be written to `localStorage` (or a backend you wire up yourself).
 
 ## Refreshing the bundled market data
 
@@ -353,16 +485,43 @@ React Router only supplies a `BrowserRouter` wrapper — there are no routes.
 
 ## Contributing
 
-Issues and pull requests are welcome. High-value contributions right now: a real
-resting-order book in the demo engine, persistence for the paper account, data
-adapters for other exchanges/brokers, more indicators, and finishing or removing
-the dormant panels listed above.
+OpenCharts is a community project and it is open to anyone who wants to make it
+better — there is no core team you need permission from. Issues, pull requests,
+questions and design opinions are all welcome, and small first contributions are
+genuinely useful.
+
+Good places to start:
+
+- **Indicators and drawing tools** — the two most self-contained additions; see
+  [Building on OpenCharts](#building-on-opencharts).
+- **A real resting-order book** in the demo engine, so limit and stop orders
+  actually work.
+- **Persistence for the paper account**, so a session survives a reload.
+- **Data adapters** for other exchanges or brokers, behind the existing
+  `api` / `wsClient` interfaces.
+- **Themes and layout customization** — the chart palette lives in
+  `pages/trading/constants.ts` and the design tokens in `tailwind.config.js`.
+- **Finishing or removing the dormant panels** listed under
+  [Known limitations](#known-limitations).
+- **Tests, docs and bug reports** — coverage is thin and every report helps.
+
+Before opening a PR, run `npm run typecheck` and `npm run test`, and keep changes
+to the demo layer behind the `api` / `wsClient` interfaces so the terminal stays
+backend-agnostic.
 
 ## Acknowledgements
 
-The chart engine and several plugins build on TradingView's open-source
-[`lightweight-charts`](https://github.com/tradingview/lightweight-charts) library.
+OpenCharts stands on TradingView's open-source
+[Lightweight Charts™](https://github.com/tradingview/lightweight-charts), which
+renders every chart here, and on the plugin examples shipped in that repository.
+Thank you to TradingView for releasing it under a permissive license.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+OpenCharts is released under the **MIT License** — see [LICENSE](LICENSE).
+
+It bundles TradingView's Lightweight Charts™, which is licensed under the
+**Apache License 2.0** and requires that you keep its attribution notice and a
+link to <https://www.tradingview.com/> visible to your users. See
+[Built on Lightweight Charts](#built-on-lightweight-charts) for what that means
+in practice before you deploy or redistribute a fork.
