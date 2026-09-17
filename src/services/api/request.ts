@@ -1,5 +1,6 @@
 /** Thin HTTP client for the PropSim API */
 import { toast as globalToast } from "../toast.ts";
+import { safeStorage } from "../../lib/safe-storage.ts";
 
 /** API base URL — uses VITE_API_URL env var (for direct gateway access) or /api (nginx proxy) */
 export const API_BASE = import.meta.env.VITE_API_URL
@@ -27,7 +28,7 @@ let _refreshPromise: Promise<string | null> | null = null;
 async function tryTokenRefresh(): Promise<string | null> {
   if (_refreshPromise) return _refreshPromise;
   _refreshPromise = (async () => {
-    const rt = localStorage.getItem("refresh_token");
+    const rt = safeStorage.getItem("refresh_token");
     if (!rt) return null;
     // Give the refresh its own 10 s deadline so a slow /auth/refresh
     // can't hold any caller past its own timeoutMs.
@@ -45,8 +46,8 @@ async function tryTokenRefresh(): Promise<string | null> {
       const json = await res.json().catch(() => null);
       const data = json?.data ?? json;
       if (!data?.accessToken) return null;
-      localStorage.setItem("access_token", data.accessToken);
-      if (data.refreshToken) localStorage.setItem("refresh_token", data.refreshToken);
+      safeStorage.setItem("access_token", data.accessToken);
+      if (data.refreshToken) safeStorage.setItem("refresh_token", data.refreshToken);
       return data.accessToken as string;
     } catch {
       return null;
@@ -85,7 +86,7 @@ export interface RequestOptions extends RequestInit {
 export async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { timeoutMs = 20_000, ...fetchOpts } = opts;
 
-  const token = localStorage.getItem("access_token");
+  const token = safeStorage.getItem("access_token");
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...((fetchOpts.headers as Record<string, string>) || {}),

@@ -1,6 +1,25 @@
 import { useMemo } from "react";
 import { formatNumber, cn } from "../../lib/utils.ts";
 
+/**
+ * Deterministic pseudo-random depth for a price level.
+ *
+ * The bundled market data carries no order book, so ladder sizes are
+ * simulated. Deriving them from the price level (rather than Math.random on
+ * every render) keeps a level's size stable while the price hovers, so the
+ * ladder no longer reshuffles every tick — and the component stays pure.
+ */
+function depthAt(symbol: string, price: number, spread: number, base: number, range: number): number {
+  // Bucket by tick so tiny float noise does not reshuffle the book.
+  const bucket = spread > 0 ? Math.round(price / spread) : Math.round(price);
+  let hash = 2166136261 ^ bucket;
+  for (let i = 0; i < symbol.length; i += 1) {
+    hash = Math.imul(hash ^ symbol.charCodeAt(i), 16777619);
+  }
+  const unit = ((hash >>> 0) % 1000) / 1000;
+  return Math.floor(unit * range + base);
+}
+
 export function DOMPanel({
   symbol,
   tick,
@@ -12,40 +31,45 @@ export function DOMPanel({
     if (!tick) return [];
     const mid = (tick.bid + tick.ask) / 2;
     const step = tick.ask - tick.bid || 0.0001;
-    const result = [];
+    const result: Array<{
+      price: number;
+      bidSize: number;
+      askSize: number;
+      type: "bid" | "ask";
+    }> = [];
 
     for (let i = 10; i >= 1; i--) {
+      const price = mid + step * i;
       result.push({
-        price: mid + step * i,
+        price,
         bidSize: 0,
-        askSize: Math.floor(Math.random() * 50 + 5),
-        type: "ask" as const,
+        askSize: depthAt(symbol, price, step, 5, 50),
+        type: "ask",
       });
     }
     result.push({
       price: tick.ask,
       bidSize: 0,
-      askSize: Math.floor(Math.random() * 100 + 20),
-      type: "ask" as const,
+      askSize: depthAt(symbol, tick.ask, step, 20, 100),
+      type: "ask",
     });
     result.push({
       price: tick.bid,
-      bidSize: Math.floor(Math.random() * 100 + 20),
+      bidSize: depthAt(symbol, tick.bid, step, 20, 100),
       askSize: 0,
-      type: "bid" as const,
+      type: "bid",
     });
     for (let i = 1; i <= 10; i++) {
+      const price = mid - step * i;
       result.push({
-        price: mid - step * i,
-        bidSize: Math.floor(Math.random() * 50 + 5),
+        price,
+        bidSize: depthAt(symbol, price, step, 5, 50),
         askSize: 0,
-        type: "bid" as const,
+        type: "bid",
       });
     }
     return result;
-    // tick is captured via tick?.bid and tick?.ask; including tick.bid/tick.ask is sufficient
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tick?.bid, tick?.ask]);
+  }, [symbol, tick]);
 
   const maxSize = Math.max(...levels.map((l) => Math.max(l.bidSize, l.askSize)), 1);
 

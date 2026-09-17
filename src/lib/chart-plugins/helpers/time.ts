@@ -8,7 +8,7 @@ export function convertTime(t: Time): number {
 }
 
 export function displayTime(time: Time): string {
-  if (typeof time == "string") return time;
+  if (typeof time === "string") return time;
   const date = isBusinessDay(time)
     ? new Date(time.year, time.month, time.day)
     : new Date(time * 1000);

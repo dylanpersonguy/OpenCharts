@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from "react";
+import { safeStorage } from "../lib/safe-storage.ts";
 
 const STORAGE_KEY = "tradeSoundMuted";
 
@@ -10,7 +11,7 @@ const STORAGE_KEY = "tradeSoundMuted";
  * a short, satisfying "cha-ching" tone (no external audio file needed).
  */
 export function useTradeSound() {
-  const [muted, setMuted] = useState(() => localStorage.getItem(STORAGE_KEY) === "true");
+  const [muted, setMuted] = useState(() => safeStorage.getItem(STORAGE_KEY) === "true");
   const ctxRef = useRef<AudioContext | null>(null);
 
   const getCtx = useCallback(() => {
@@ -59,7 +60,7 @@ export function useTradeSound() {
   const toggleMute = useCallback(() => {
     setMuted((prev) => {
       const next = !prev;
-      localStorage.setItem(STORAGE_KEY, String(next));
+      safeStorage.setItem(STORAGE_KEY, String(next));
       return next;
     });
   }, []);

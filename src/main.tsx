@@ -7,6 +7,7 @@ import { App } from "./App.tsx";
 import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { MarketDataBridge } from "./components/MarketDataBridge.tsx";
 import "./styles/global.css";
+import { safeSession } from "./lib/safe-storage.ts";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -46,7 +47,7 @@ function handleChunkLoadError(event: ErrorEvent | PromiseRejectionEvent) {
   if (!isChunkLoadError(error)) return;
 
   // Check if we already reloaded recently
-  const lastReload = sessionStorage.getItem(RELOAD_KEY);
+  const lastReload = safeSession.getItem(RELOAD_KEY);
   if (lastReload) {
     const elapsed = Date.now() - Number(lastReload);
     if (elapsed < RELOAD_EXPIRY_MS) {
@@ -56,7 +57,7 @@ function handleChunkLoadError(event: ErrorEvent | PromiseRejectionEvent) {
   }
 
   console.warn("[ChunkLoader] Chunk load failed, reloading page:", error);
-  sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+  safeSession.setItem(RELOAD_KEY, String(Date.now()));
   window.location.reload();
 }
 

@@ -24,6 +24,7 @@ import { MOCK_EVENTS, MOCK_NEWS } from "./constants.ts";
 import { PositionsTable } from "./PositionsTable.tsx";
 import { OrdersTable } from "./OrdersTable.tsx";
 import { computeLivePnl, computeLivePrice } from "../../lib/livePnl.ts";
+import { safeStorage } from "../../lib/safe-storage.ts";
 
 type TradingActionError = {
   error?: { message?: string };
@@ -413,7 +414,7 @@ function TradeHistoryTable({ accountId }: { accountId: string | null }) {
 // ── Economic Calendar ────────────────────────────────────────
 function EconomicCalendar() {
   const [useTvCalendar, setUseTvCalendar] = useState(
-    () => localStorage.getItem("tvEconCalendar") !== "false",
+    () => safeStorage.getItem("tvEconCalendar") !== "false",
   );
   const isDark = !document.documentElement.classList.contains("light");
 
@@ -429,7 +430,7 @@ function EconomicCalendar() {
         <button
           onClick={() => {
             setUseTvCalendar(false);
-            localStorage.setItem("tvEconCalendar", "false");
+            safeStorage.setItem("tvEconCalendar", "false");
           }}
           className={cn(
             "px-2 py-0.5 rounded text-[10px] font-medium",
@@ -443,7 +444,7 @@ function EconomicCalendar() {
         <button
           onClick={() => {
             setUseTvCalendar(true);
-            localStorage.setItem("tvEconCalendar", "true");
+            safeStorage.setItem("tvEconCalendar", "true");
           }}
           className={cn(
             "px-2 py-0.5 rounded text-[10px] font-medium",

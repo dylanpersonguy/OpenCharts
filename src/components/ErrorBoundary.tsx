@@ -2,6 +2,7 @@ import { Component, type ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { AlertTriangle, RefreshCw } from "lucide-react";
+import { safeSession } from "../lib/safe-storage.ts";
 
 interface Props {
   children: ReactNode;
@@ -42,9 +43,9 @@ export class ErrorBoundary extends Component<Props, State> {
       /Failed to fetch.*\.(js|css)/.test(message);
     if (isChunkLoadError) {
       const RELOAD_KEY = "vite_chunk_reload_attempted";
-      const last = sessionStorage.getItem(RELOAD_KEY);
+      const last = safeSession.getItem(RELOAD_KEY);
       if (!last || Date.now() - Number(last) > 10_000) {
-        sessionStorage.setItem(RELOAD_KEY, String(Date.now()));
+        safeSession.setItem(RELOAD_KEY, String(Date.now()));
         window.location.reload();
       }
     }

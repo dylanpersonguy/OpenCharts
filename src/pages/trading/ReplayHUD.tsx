@@ -3,6 +3,7 @@ import { Play, Pause, Square } from "lucide-react";
 import { cn } from "../../lib/utils.ts";
 import { useTradingStore } from "../../services/store.tsx";
 import { accountsApi } from "../../services/api/accounts.ts";
+import { safeSession } from "../../lib/safe-storage.ts";
 
 const SPEED_OPTIONS = [0.5, 1, 2, 5, 10] as const;
 type Speed = (typeof SPEED_OPTIONS)[number];
@@ -22,12 +23,12 @@ export function ReplayHUD({ accountId }: { accountId: string }) {
 
   const storageKey = `replay_session_date_${accountId}`;
   const [sessionDate, setSessionDate] = useState<string>(
-    () => sessionStorage.getItem(storageKey) ?? new Date().toISOString().slice(0, 10),
+    () => safeSession.getItem(storageKey) ?? new Date().toISOString().slice(0, 10),
   );
 
   const handleDateChange = (date: string) => {
     setSessionDate(date);
-    sessionStorage.setItem(storageKey, date);
+    safeSession.setItem(storageKey, date);
   };
 
   const handleStart = () => {

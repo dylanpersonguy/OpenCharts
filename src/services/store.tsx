@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { api } from "./api.ts";
 import { wsClient } from "./ws.ts";
 import type { Account, Order, Position, Symbol, User } from "./schemas.ts";
+import { safeStorage } from "../lib/safe-storage.ts";
 
 type LoginMfaResponse = {
   mfaRequired: true;
@@ -26,10 +27,10 @@ interface AuthState {
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
-  accessToken: localStorage.getItem("access_token"),
-  refreshToken: localStorage.getItem("refresh_token"),
-  user: JSON.parse(localStorage.getItem("user") || "null"),
-  isDemo: localStorage.getItem("is_demo") === "true",
+  accessToken: safeStorage.getItem("access_token"),
+  refreshToken: safeStorage.getItem("refresh_token"),
+  user: safeStorage.getJSON<User | null>("user", null),
+  isDemo: safeStorage.getItem("is_demo") === "true",
   mfaPending: null,
 
   login: async (email, password) => {
@@ -45,10 +46,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       });
       return;
     }
-    localStorage.setItem("access_token", data.accessToken);
-    localStorage.setItem("refresh_token", data.refreshToken);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    localStorage.removeItem("is_demo");
+    safeStorage.setItem("access_token", data.accessToken);
+    safeStorage.setItem("refresh_token", data.refreshToken);
+    safeStorage.setItem("user", JSON.stringify(data.user));
+    safeStorage.removeItem("is_demo");
     set({
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
@@ -69,10 +70,10 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const json = await res.json().catch(() => null);
     if (!res.ok) throw new Error(json?.error?.message || "Google login failed");
     const data = json?.data ?? json;
-    localStorage.setItem("access_token", data.accessToken);
-    localStorage.setItem("refresh_token", data.refreshToken);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    localStorage.removeItem("is_demo");
+    safeStorage.setItem("access_token", data.accessToken);
+    safeStorage.setItem("refresh_token", data.refreshToken);
+    safeStorage.setItem("user", JSON.stringify(data.user));
+    safeStorage.removeItem("is_demo");
     set({
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
@@ -85,14 +86,14 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   demoLogin: async () => {
     // Clear any stale account selection from a previous session
-    localStorage.removeItem("active_account");
+    safeStorage.removeItem("active_account");
     // Force dark mode for demo
-    localStorage.setItem("theme", "dark");
+    safeStorage.setItem("theme", "dark");
     const data = await api.demoLogin();
-    localStorage.setItem("access_token", data.accessToken);
-    localStorage.setItem("refresh_token", data.refreshToken);
-    localStorage.setItem("user", JSON.stringify(data.user));
-    localStorage.setItem("is_demo", "true");
+    safeStorage.setItem("access_token", data.accessToken);
+    safeStorage.setItem("refresh_token", data.refreshToken);
+    safeStorage.setItem("user", JSON.stringify(data.user));
+    safeStorage.setItem("is_demo", "true");
     set({
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
@@ -107,9 +108,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     const pending = get().mfaPending;
     if (!pending) throw new Error("No MFA pending");
     const data = await api.completeMfaLogin(pending.mfaToken, code);
-    localStorage.setItem("access_token", data.accessToken);
-    localStorage.setItem("refresh_token", data.refreshToken);
-    localStorage.setItem("user", JSON.stringify(data.user));
+    safeStorage.setItem("access_token", data.accessToken);
+    safeStorage.setItem("refresh_token", data.refreshToken);
+    safeStorage.setItem("user", JSON.stringify(data.user));
     set({
       accessToken: data.accessToken,
       refreshToken: data.refreshToken,
@@ -125,29 +126,29 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   logout: () => {
     // AUTH-VULN-06/07: Send refresh token to server for proper revocation
-    const rt = localStorage.getItem("refresh_token");
+    const rt = safeStorage.getItem("refresh_token");
     api.logout(rt || undefined).catch(() => {});
-    localStorage.removeItem("access_token");
-    localStorage.removeItem("refresh_token");
-    localStorage.removeItem("user");
-    localStorage.removeItem("is_demo");
-    localStorage.removeItem("active_account");
+    safeStorage.removeItem("access_token");
+    safeStorage.removeItem("refresh_token");
+    safeStorage.removeItem("user");
+    safeStorage.removeItem("is_demo");
+    safeStorage.removeItem("active_account");
     set({ accessToken: null, refreshToken: null, user: null, isDemo: false });
     wsClient.disconnect();
   },
 
   restoreSession: async () => {
-    const token = localStorage.getItem("access_token");
+    const token = safeStorage.getItem("access_token");
     if (!token) return;
-    const rt = localStorage.getItem("refresh_token");
+    const rt = safeStorage.getItem("refresh_token");
     // If the token is expired or within 5 minutes of expiry, refresh immediately
     // rather than waiting for the scheduler (which floors at 60s and won't help
     // a token that's already dead after the phone was locked).
     if (rt && isTokenStale(token)) {
       try {
         const result = await api.refreshToken(rt);
-        localStorage.setItem("access_token", result.accessToken);
-        localStorage.setItem("refresh_token", result.refreshToken);
+        safeStorage.setItem("access_token", result.accessToken);
+        safeStorage.setItem("refresh_token", result.refreshToken);
         set({ accessToken: result.accessToken, refreshToken: result.refreshToken });
         wsClient.connect(result.accessToken);
         startTokenRefresh();
@@ -199,13 +200,13 @@ function startTokenRefresh() {
   const MAX_RETRIES = 3;
 
   const doRefresh = async () => {
-    const rt = localStorage.getItem("refresh_token");
+    const rt = safeStorage.getItem("refresh_token");
     if (!rt) return;
     try {
       const result = await api.refreshToken(rt);
       retries = 0; // reset on success
-      localStorage.setItem("access_token", result.accessToken);
-      localStorage.setItem("refresh_token", result.refreshToken);
+      safeStorage.setItem("access_token", result.accessToken);
+      safeStorage.setItem("refresh_token", result.refreshToken);
       useAuthStore.setState({
         accessToken: result.accessToken,
         refreshToken: result.refreshToken,
@@ -228,7 +229,7 @@ function startTokenRefresh() {
   };
 
   // Schedule first refresh based on current token's actual expiry
-  const currentToken = localStorage.getItem("access_token");
+  const currentToken = safeStorage.getItem("access_token");
   const firstDelay = currentToken ? getTokenExpiresIn(currentToken) : 13 * 60 * 1000;
   refreshTimer = setTimeout(doRefresh, firstDelay);
 }
@@ -268,10 +269,13 @@ let _liveTickRafId: number | null = null;
 /** Per-symbol decimal precision cache — populated on first tick, avoids O(n) symbol lookup per tick */
 const _symbolDecimals = new Map<string, number>();
 function _pipDecimals(tickSize?: number | null): number {
-  if (!tickSize) return 5;
-  const s = String(tickSize);
-  const dot = s.indexOf(".");
-  return dot >= 0 ? s.length - dot - 1 : 2;
+  if (!tickSize || !Number.isFinite(tickSize) || tickSize <= 0) return 5;
+  // toFixed(20) normalises exponent notation (1e-7 → "0.00000010000000000000")
+  // that String() would otherwise hand back with no decimal point at all.
+  const fixed = tickSize.toFixed(20).replace(/0+$/, "");
+  const dot = fixed.indexOf(".");
+  if (dot < 0) return 0;
+  return Math.min(10, fixed.length - dot - 1);
 }
 
 interface TradingState {
@@ -324,7 +328,7 @@ interface TradingState {
 }
 
 export const useTradingStore = create<TradingState>((set, get) => ({
-  activeAccountId: localStorage.getItem("active_account"),
+  activeAccountId: safeStorage.getItem("active_account"),
   accounts: [],
   positions: [],
   orders: [],
@@ -341,7 +345,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   replaySessionDate: null,
 
   setActiveAccount: (id) => {
-    localStorage.setItem("active_account", id);
+    safeStorage.setItem("active_account", id);
     set({ activeAccountId: id });
   },
 

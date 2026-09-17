@@ -1,14 +1,25 @@
 import type { DrawingLine } from "../../pages/trading/constants.ts";
-import type { Candle } from "../schemas.ts";
-import { getHistory } from "./candles.ts";
+import { safeStorage } from "../../lib/safe-storage.ts";
+import type { AccountMetricsResponse } from "../api/auth.ts";
+import type {
+  CreateJournalEntryInput,
+  JournalEntriesResponse,
+  UpdateJournalEntryInput,
+} from "../api/journal.ts";
+import type { MarketDataCandlesPayload } from "../api/market-data.ts";
+import type { Candle, Order, Position, Symbol } from "../schemas.ts";
+import { getHistory, type HistoryRange } from "./candles.ts";
 import * as engine from "./engine.ts";
 import { DEMO_SYMBOLS } from "./instruments.ts";
 
 /**
  * Demo-mode API. Replaces the HTTP client for everything the terminal needs:
  * trading actions hit the in-browser paper engine, market data comes from the
- * bundled real OHLC, and chart drawings persist to localStorage. Methods not
- * implemented here fall through to a benign stub (see services/api.ts).
+ * bundled real OHLC, and chart drawings persist to localStorage.
+ *
+ * Every method carries the signature its callers actually use, so `api` in
+ * services/api.ts can be typed exactly — calling a method that does not exist
+ * here is a compile error rather than a silent `null` at runtime.
  */
 
 const DEMO_USER = {
@@ -21,7 +32,13 @@ const DEMO_USER = {
   createdAt: new Date().toISOString(),
 };
 
-function authResponse() {
+type AuthResponse = {
+  accessToken: string;
+  refreshToken: string;
+  user: typeof DEMO_USER;
+};
+
+function authResponse(): AuthResponse {
   return { accessToken: "demo-token", refreshToken: "demo-refresh", user: DEMO_USER };
 }
 
@@ -29,58 +46,114 @@ function authResponse() {
 const DRAW_KEY = (symbol: string) => `oc_drawings_${symbol}`;
 
 function readDrawings(symbol: string): DrawingLine[] {
+  const raw = safeStorage.getItem(DRAW_KEY(symbol));
+  if (!raw) return [];
   try {
-    return JSON.parse(localStorage.getItem(DRAW_KEY(symbol)) ?? "[]");
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as DrawingLine[]) : [];
   } catch {
     return [];
   }
 }
+
 function writeDrawings(symbol: string, list: DrawingLine[]): void {
-  localStorage.setItem(DRAW_KEY(symbol), JSON.stringify(list));
+  safeStorage.setItem(DRAW_KEY(symbol), JSON.stringify(list));
 }
 
 const chartDrawings = {
-  list: (symbol: string) => Promise.resolve(readDrawings(symbol)),
-  save: (symbol: string, _tf: string, drawing: DrawingLine) => {
+  list: (symbol: string): Promise<DrawingLine[]> => Promise.resolve(readDrawings(symbol)),
+  save: (symbol: string, _timeframe: string, drawing: DrawingLine): Promise<{ saved: boolean }> => {
     const list = readDrawings(symbol).filter((d) => d.id !== drawing.id);
     list.push(drawing);
     writeDrawings(symbol, list);
     return Promise.resolve({ saved: true });
   },
-  remove: (drawingId: string) => {
+  remove: (drawingId: string): Promise<{ deleted: boolean }> => {
     for (const s of DEMO_SYMBOLS) {
-      writeDrawings(s.name, readDrawings(s.name).filter((d) => d.id !== drawingId));
+      writeDrawings(
+        s.name,
+        readDrawings(s.name).filter((d) => d.id !== drawingId),
+      );
     }
     return Promise.resolve({ deleted: true });
   },
-  clear: (symbol: string) => {
+  clear: (symbol: string): Promise<{ cleared: boolean }> => {
     writeDrawings(symbol, []);
     return Promise.resolve({ cleared: true });
   },
 };
 
-const candlesMeta = (candles: Candle[]) => ({
-  candles,
+const candlesMeta = (candles: Candle[]): MarketDataCandlesPayload => ({
+  // The REST contract carries an explicit ms timestamp beside the second-based
+  // chart time; mirror it so consumers typed against the real payload work.
+  candles: candles.map((c) => ({ ...c, timestamp: c.time * 1000 })),
   metadata: { isPartial: false, backfillQueued: false, historicalCoverageStart: null },
 });
 
+type Paginated<T> = {
+  data: T[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+};
+
+function paginate<T>(rows: T[], page = 1, pageSize = 50): Paginated<T> {
+  const safePage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
+  const start = (safePage - 1) * pageSize;
+  return {
+    data: rows.slice(start, start + pageSize),
+    total: rows.length,
+    page: safePage,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(rows.length / pageSize)),
+  };
+}
+
+/** Replay session payload shape (mirrors the REST contract in api/accounts.ts). */
+export type ReplaySessionPayload = {
+  replaySession: {
+    id: string;
+    status: string;
+    speed: number;
+    cursorTimestamp: string | null;
+    sessionDate: string;
+  };
+  tickBuffer: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }>;
+  tradeEvents: Array<{
+    id: string;
+    type: "entry" | "exit" | "violation";
+    timestamp: string;
+    symbolName: string | null;
+    side: string | null;
+    price: number | null;
+    pnl: number | null;
+    ruleCode?: string;
+  }>;
+  meta: { primarySymbol: string | null; sessionDate: string; tickCount: number };
+};
+
 export const demoApi = {
   // ── Auth (no real auth in demo) ──
-  login: () => Promise.resolve(authResponse()),
-  demoLogin: () => Promise.resolve(authResponse()),
-  register: () => Promise.resolve(authResponse()),
-  completeMfaLogin: () => Promise.resolve(authResponse()),
-  logout: () => Promise.resolve({ success: true }),
-  refreshToken: () => Promise.resolve({ accessToken: "demo-token", refreshToken: "demo-refresh" }),
+  login: (_email: string, _password: string): Promise<AuthResponse> =>
+    Promise.resolve(authResponse()),
+  demoLogin: (): Promise<AuthResponse> => Promise.resolve(authResponse()),
+  register: (_input: unknown): Promise<AuthResponse> => Promise.resolve(authResponse()),
+  completeMfaLogin: (_mfaToken: string, _code: string): Promise<AuthResponse> =>
+    Promise.resolve(authResponse()),
+  logout: (_refreshToken?: string): Promise<{ success: boolean }> =>
+    Promise.resolve({ success: true }),
+  refreshToken: (_token: string): Promise<{ accessToken: string; refreshToken: string }> =>
+    Promise.resolve({ accessToken: "demo-token", refreshToken: "demo-refresh" }),
   getMyProfile: () => Promise.resolve(DEMO_USER),
   getMe: () => Promise.resolve(DEMO_USER),
 
   // ── Accounts ──
   getMyAccounts: () => Promise.resolve(engine.getAccounts()),
-  getAccount: () => Promise.resolve(engine.getAccount()),
-  getEquityHistory: () => Promise.resolve([]),
-  getLedger: () => Promise.resolve({ data: [], total: 0, page: 1, pageSize: 50, totalPages: 0 }),
-  getAccountStats: () =>
+  getAccount: (_accountId?: string) => Promise.resolve(engine.getAccount()),
+  getEquityHistory: (_accountId: string) => Promise.resolve([]),
+  getLedger: (_accountId: string, page = 1) => Promise.resolve(paginate([], page)),
+  getAccountStats: (_accountId: string) =>
     Promise.resolve({
       totalTrades: 0,
       winRate: 0,
@@ -90,8 +163,8 @@ export const demoApi = {
       bestTrade: 0,
       worstTrade: 0,
     }),
-  setAccountLabel: () => Promise.resolve({ success: true }),
-  getAccountMetrics: () => {
+  setAccountLabel: (_accountId: string, _label: string) => Promise.resolve({ success: true }),
+  getAccountMetrics: (_accountId: string): Promise<AccountMetricsResponse> => {
     const a = engine.getAccount();
     return Promise.resolve({
       accountId: a.id,
@@ -124,55 +197,81 @@ export const demoApi = {
       startingBalance: a.template?.startingBalance ?? a.balance,
       currency: "USD",
       lastMarkTs: new Date().toISOString(),
-    });
+    } as AccountMetricsResponse);
   },
 
   // ── Symbols & market data ──
-  getSymbols: () => Promise.resolve(DEMO_SYMBOLS),
-  getCandles: (symbol: string, timeframe: string, limit?: number) =>
-    Promise.resolve(getHistory(symbol, timeframe, limit)),
-  getCandlesWithMeta: (symbol: string, timeframe: string, limit?: number) =>
-    Promise.resolve(candlesMeta(getHistory(symbol, timeframe, limit))),
+  getSymbols: (): Promise<Symbol[]> => Promise.resolve(DEMO_SYMBOLS),
+  getCandles: (
+    symbol: string,
+    timeframe: string,
+    limit?: number,
+    range?: HistoryRange,
+  ): Promise<Candle[]> => getHistory(symbol, timeframe, limit, range),
+  getCandlesWithMeta: (
+    symbol: string,
+    timeframe: string,
+    limit?: number,
+    range?: HistoryRange,
+  ): Promise<MarketDataCandlesPayload> =>
+    getHistory(symbol, timeframe, limit, range).then(candlesMeta),
   getTick: (symbol: string) => {
     const price = engine.getLastPrice(symbol);
     return Promise.resolve({ symbol, bid: price, ask: price, timestamp: Date.now() });
   },
-  getMarketDataHealth: () => Promise.resolve({ status: "ok" }),
-  getEconomicCalendar: () => Promise.resolve([]),
+  getMarketDataHealth: () => Promise.resolve({ status: "ok" as const }),
+  getEconomicCalendar: (_currencies: string[], _from?: string, _to?: string) =>
+    Promise.resolve([]),
 
   // ── Trading (paper engine) ──
-  placeOrder: (data: engine.PlaceOrderArgs) => Promise.resolve(engine.placeOrder(data)),
+  placeOrder: (data: engine.PlaceOrderArgs): Promise<Order> =>
+    Promise.resolve(engine.placeOrder(data)),
   cancelOrder: (orderId: string) => Promise.resolve(engine.cancelOrder(orderId)),
-  modifyOrder: (orderId: string) => Promise.resolve(engine.getOrders().find((o) => o.id === orderId)),
-  cancelAllOrders: () => Promise.resolve({ success: true }),
-  getOrders: () => Promise.resolve(engine.getOrders()),
-  getPositions: () => Promise.resolve(engine.getPositions()),
+  modifyOrder: (orderId: string, mods: engine.OrderModifications): Promise<Order> =>
+    Promise.resolve(engine.modifyOrder(orderId, mods)),
+  cancelAllOrders: (_accountId?: string) => Promise.resolve(engine.cancelAllOrders()),
+  getOrders: (_accountId: string, status?: string): Promise<Order[]> => {
+    const all = engine.getOrders();
+    return Promise.resolve(status ? all.filter((o) => o.status === status) : all);
+  },
+  getPositions: (_accountId: string): Promise<Position[]> => Promise.resolve(engine.getPositions()),
   getOpenPositionCount: () => Promise.resolve(engine.getPositions().length),
   closePosition: (positionId: string, quantity?: number) =>
     Promise.resolve(engine.closePosition(positionId, quantity)),
-  closeAllPositions: () => Promise.resolve(engine.closeAllPositions()),
-  modifyPosition: (positionId: string, mods: { takeProfit?: number | null; stopLoss?: number | null }) =>
-    Promise.resolve(engine.modifyPosition(positionId, mods)),
-  getFills: () => Promise.resolve({ data: engine.getFills(), total: engine.getFills().length, page: 1, pageSize: 50, totalPages: 1 }),
-  getClosedPositions: () =>
-    Promise.resolve({ data: engine.getClosedPositions(), total: engine.getClosedPositions().length, page: 1, pageSize: 50, totalPages: 1 }),
-  getClosedPositionsSummary: () => Promise.resolve({ realizedPnl: 0, trades: 0, wins: 0, losses: 0 }),
-  getFillQuality: () => Promise.resolve([]),
+  closeAllPositions: (_accountId?: string) => Promise.resolve(engine.closeAllPositions()),
+  modifyPosition: (
+    positionId: string,
+    mods: { takeProfit?: number | null; stopLoss?: number | null },
+  ): Promise<Position> => Promise.resolve(engine.modifyPosition(positionId, mods)),
+  getFills: (_accountId: string, page = 1) => Promise.resolve(paginate(engine.getFills(), page)),
+  getClosedPositions: (_accountId: string, page = 1) =>
+    Promise.resolve(paginate(engine.getClosedPositions(), page)),
+  getClosedPositionsSummary: (_accountId: string) =>
+    Promise.resolve(engine.getClosedPositionsSummary()),
+  getFillQuality: (_accountId: string) => Promise.resolve([]),
 
-  // ── Trade journal (localStorage-free demo: empty) ──
-  getJournalEntries: () => Promise.resolve([]),
-  createJournalEntry: () => Promise.resolve(null),
-  updateJournalEntry: () => Promise.resolve(null),
-  deleteJournalEntry: () => Promise.resolve({ success: true }),
+  // ── Trade journal (not persisted in demo mode) ──
+  getJournalEntries: (
+    _accountId: string,
+    _opts?: { limit?: number; symbol?: string },
+  ): Promise<JournalEntriesResponse> => Promise.resolve({ entries: [], total: 0 }),
+  createJournalEntry: (_data: CreateJournalEntryInput) => Promise.resolve(null),
+  updateJournalEntry: (_id: string, _data: UpdateJournalEntryInput) => Promise.resolve(null),
+  deleteJournalEntry: (_id: string) => Promise.resolve({ success: true }),
 
   // ── Chart persistence ──
   chartDrawings,
-  savePreferences: () => Promise.resolve({ success: true }),
+  /** No server-side preference store in demo mode — local values are authoritative. */
+  getPreferences: (): Promise<Record<string, string> | null> => Promise.resolve(null),
+  savePreferences: (_prefs: Record<string, string>) => Promise.resolve({ success: true }),
 
   // ── Feature gating / misc (terminal reads these on mount) ──
-  getFeatureFlags: () => Promise.resolve({}),
-  isAiTraderEnabled: () => Promise.resolve(false),
-  getAnnouncements: () => Promise.resolve([]),
+  getFeatureFlags: (): Promise<Record<string, boolean>> => Promise.resolve({}),
+  isAiTraderEnabled: (): Promise<{ enabled: boolean }> => Promise.resolve({ enabled: false }),
+  getAnnouncements: (_page?: number) => Promise.resolve([]),
   getAnnouncementsUnreadCount: () => Promise.resolve(0),
-  replayGetSession: () => Promise.resolve(null),
+  replayGetSession: (
+    _accountId: string,
+    _sessionDate: string,
+  ): Promise<ReplaySessionPayload | null> => Promise.resolve(null),
 };

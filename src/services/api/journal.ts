@@ -1,4 +1,5 @@
 import { request } from "./request";
+import { safeStorage } from "../../lib/safe-storage.ts";
 
 export interface JournalEntry {
   id: string;
@@ -97,7 +98,7 @@ export const journalApi = {
   exportAnalyticsPdf: (accountId?: string) => {
     // Opens a direct download link (returns HTML for PDF)
     const base = (window as WindowWithApiBase).__API_BASE || "";
-    const token = localStorage.getItem("accessToken") || "";
+    const token = safeStorage.getItem("accessToken") || "";
     const url = `${base}/api/trader/analytics/export/pdf${accountId ? `?accountId=${accountId}` : ""}`;
     const a = document.createElement("a");
     a.href = url;

@@ -3,6 +3,7 @@ import { Star } from "lucide-react";
 import { usePlaceOrder } from "../../services/queries.ts";
 import { formatNumber, cn } from "../../lib/utils.ts";
 import { toast } from "../../services/toast.ts";
+import { safeStorage } from "../../lib/safe-storage.ts";
 
 export function WatchlistPanel({
   symbols,
@@ -33,7 +34,7 @@ export function WatchlistPanel({
 
   const [favorites, setFavorites] = useState<Set<string>>(() => {
     try {
-      const saved = localStorage.getItem("watchlist_favorites");
+      const saved = safeStorage.getItem("watchlist_favorites");
       return saved ? new Set(JSON.parse(saved)) : new Set<string>();
     } catch {
       return new Set<string>();
@@ -45,7 +46,7 @@ export function WatchlistPanel({
       const next = new Set(prev);
       if (next.has(name)) next.delete(name);
       else next.add(name);
-      localStorage.setItem("watchlist_favorites", JSON.stringify([...next]));
+      safeStorage.setItem("watchlist_favorites", JSON.stringify([...next]));
       return next;
     });
   }, []);

@@ -87,9 +87,10 @@ class SessionHighlightingPaneView implements ISeriesPrimitivePaneView {
   }
 }
 
-export interface SessionHighlightingOptions {}
+/** The plugin takes no options today; the alias keeps the public API stable. */
+export type SessionHighlightingOptions = Record<string, never>;
 
-const defaults: Required<SessionHighlightingOptions> = {};
+const defaults: SessionHighlightingOptions = {};
 
 interface BackgroundData {
   time: Time;

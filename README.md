@@ -117,7 +117,11 @@ toolbar and removable individually or in bulk from the chart context menu.
 
 ### 💵 Built-in paper trading
 - $100,000 starting balance, 100× leverage, no commission or swap.
-- Orders fill against an in-browser engine at the latest replayed price.
+- **Market, limit and stop orders** with a real lifecycle: market fills at the
+  current price, limit and stop orders rest as `PENDING` and trigger when a tick
+  crosses them (limits get price improvement, stops take the slippage).
+- Orders are validated before they reach the book — size, price, stop placement
+  and free margin — and rejections explain themselves.
 - Positions are **marked to market on every tick** with running P&L.
 - Stop-loss / take-profit are evaluated automatically and close positions when hit.
 - Account equity, balance, used and free margin update in real time.
@@ -155,13 +159,14 @@ marketing copy:
 | Piece | Status |
 | --- | --- |
 | OHLC history (6 crypto pairs × 8 timeframes) | **Real** Binance klines, bundled as JSON |
-| Tick feed | **Real** 1m closes, replayed on a 600 ms loop and looped when exhausted |
+| Tick feed | **Real** 1m closes, replayed every 600 ms starting at the latest close and reversing at each end of the series (no price jumps) |
 | Bar timestamps | **Shifted** so the last real bar lands on the current period |
 | Bid/ask spread | **Derived** — synthesized around the replayed close |
-| DOM ladder sizes | **Synthetic** — random sizes around the real mid price |
+| DOM ladder sizes | **Synthetic** — derived deterministically from each price level, so a level's size is stable while price hovers |
 | Order fills, positions, P&L, margin | Real arithmetic against the in-browser engine |
-| Limit / stop orders | Accepted by the ticket but **fill immediately** — there is no resting-order book |
-| Order modify / cancel-all | **No-ops** in the demo engine |
+| Limit / stop orders | **Rest as PENDING** until a tick crosses their trigger, then fill — limits at their price or better, stops at the market that triggered them |
+| Order modify / cancel | Real, and restricted to pending orders |
+| Order validation | Real — quantity, price, side, stop placement, protective-level side and free margin are all checked, with the reason surfaced in a toast |
 | News tab | **Placeholder headlines**, not a live feed |
 | Economic calendar tab & technical-analysis gauge | TradingView embed widgets — real data, loaded from TradingView's CDN |
 | Trade journal, trade calculator, AI trader, session replay | **Present in the code but not reachable** — journal and replay are flagged off pending QA, the AI trader is a stub, the calculator is never mounted |
@@ -344,6 +349,21 @@ attach it where the other primitives are attached in `ChartPanel.tsx`, then add
 it to the plugin list in `ChartToolbar.tsx` so it gets a toggle. The existing
 six plugins are the reference implementations.
 
+### Quality gates
+
+All four are expected to pass before a PR, and all four pass on `main`:
+
+```bash
+npm run typecheck   # tsc --noEmit, strict, zero errors
+npm run lint        # ESLint 9 flat config, zero errors
+npm run test        # Vitest
+npm run build       # production bundle
+```
+
+The paper engine is the part worth breaking carefully — its order lifecycle,
+margin maths and rounding are covered in
+[`src/__tests__/engine.test.ts`](src/__tests__/engine.test.ts).
+
 ### Where state lives
 
 - **Zustand** (`services/store.tsx`) — auth and trading state (symbols, accounts,
@@ -361,10 +381,16 @@ six plugins are the reference implementations.
 
 ### Gotchas worth knowing
 
-- **`api` swallows unknown methods.** [`services/api.ts`](src/services/api.ts)
-  wraps the demo table in a `Proxy` that resolves *any* unimplemented method to
-  `null`. A typo'd method name fails silently instead of throwing — check
-  `services/demo/api.ts` when a call mysteriously returns nothing.
+- **`api` is typed exactly.** [`services/api.ts`](src/services/api.ts) exposes
+  the demo table's real signatures, so calling a method it does not implement is
+  a compile error rather than a silent `null`. The `Proxy` underneath is only a
+  runtime net for dynamic access, and warns in development when it fires.
+- **Candle data loads lazily.** `services/demo/candles.ts` imports each
+  `<SYMBOL>_<tf>.json` on demand, so `getHistory` is async and the feed primes
+  the 1m series before it starts ticking.
+- **Never touch `localStorage` directly** — use
+  [`lib/safe-storage.ts`](src/lib/safe-storage.ts). Raw access throws in private
+  mode, when site data is blocked, and on quota exhaustion.
 - **Flags gate whole panels.** `REPLAY_ENABLED` in `pages/trading/constants.ts`
   hides the replay HUD and scrubber; the journal tab is commented out in
   `BottomPanel.tsx`; the AI trader is a `null`-returning stub.
@@ -440,7 +466,7 @@ network requests. Drop those components if you want a strictly offline build.
 | `npm run typecheck` | Type-check the project with `tsc` |
 | `npm run test` | Run the Vitest unit tests |
 | `npm run test:watch` | Run tests in watch mode |
-| `npm run lint` | Runs `eslint src/` — ESLint is **not** currently a declared dependency, so install it first |
+| `npm run lint` | ESLint 9 (flat config in `eslint.config.js`) |
 | `node scripts/fetch-demo-data.mjs` | Refresh bundled real OHLC |
 
 ## Tech stack
@@ -454,32 +480,30 @@ network requests. Drop those components if you want a strictly offline build.
 - **Vitest** + **Testing Library** for tests
 - Optional **posthog-js** analytics, off unless a key is set
 
-`package.json` also declares `framer-motion`, `html-to-image`,
-`@tanstack/react-virtual` and `react-router-dom`; the first three are unused and
-React Router only supplies a `BrowserRouter` wrapper — there are no routes.
+`react-router-dom` is present only to supply a `BrowserRouter` wrapper — there
+are no routes. Lint, typecheck and tests run on ESLint 9 (flat config),
+TypeScript 5.7 and Vitest.
 
 ## Known limitations
 
-- **No resting orders.** The demo engine fills every ticket immediately; limit
-  and stop prices are accepted but not worked. `modifyOrder` and
-  `cancelAllOrders` are no-ops.
 - **Account state is ephemeral** — positions, orders and balance reset on reload.
   Drawings, chart preferences and templates persist via `localStorage`.
 - **Timeline is normalized** — bundled history is shifted so the latest bar is
   "now", and the tick replay loops when it reaches the end of the 1m series.
   OHLC values are real; the timestamps are remapped to feel live.
-- **The DOM ladder is synthetic** — real mid price, random sizes. There is no
-  order book in the bundled data.
+- **The DOM ladder is synthetic** — real mid price, simulated depth. There is no
+  order book in the bundled data, so sizes are derived from the price level.
+- **One position per fill.** The engine is hedging-style: a buy and a sell on the
+  same symbol coexist rather than netting off.
 - **Crypto-only demo symbols** out of the box (the data source is Binance). Wire
   your own adapter for FX, futures or equities.
 - **Dormant code from the original platform** ships in the repo: session replay
   (`REPLAY_ENABLED = false`), the trade journal (hidden pending QA), the trade
   calculator (never mounted), the AI trader (stubbed), challenge/risk-rule price
-  levels (inert because the demo account reports no risk limits), unused
-  marketing assets under `public/`, and four dependencies nothing imports.
-- **Thin test coverage** — the Vitest suite covers `lib/utils` and the button
-  component only. Playwright is a declared dev dependency but no end-to-end
-  specs are checked in.
+  levels (inert because the demo account reports no risk limits).
+- **Test coverage is engine-first** — the paper engine, storage, id generation
+  and event bus are covered; the React components are not. Playwright is a
+  declared dev dependency but no end-to-end specs are checked in.
 - The production `build` runs Vite only; run `npm run typecheck` separately for
   full type checking.
 

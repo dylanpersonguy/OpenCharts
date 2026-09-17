@@ -1,3 +1,4 @@
+import { safeStorage } from "../../lib/safe-storage.ts";
 // Chart templates persist to localStorage in demo mode (no backend).
 
 export interface ChartTemplateContent {
@@ -21,13 +22,13 @@ const KEY = "oc_chart_templates";
 
 function readAll(): ChartTemplate[] {
   try {
-    return JSON.parse(localStorage.getItem(KEY) ?? "[]");
+    return JSON.parse(safeStorage.getItem(KEY) ?? "[]");
   } catch {
     return [];
   }
 }
 function writeAll(list: ChartTemplate[]): void {
-  localStorage.setItem(KEY, JSON.stringify(list));
+  safeStorage.setItem(KEY, JSON.stringify(list));
 }
 
 export const chartTemplatesApi = {

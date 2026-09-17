@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { CanvasRenderingTarget2D, Size } from "fancy-canvas";
 import {
   ISeriesPrimitivePaneRenderer,
@@ -45,10 +44,20 @@ function determineSectionWidth(
   return maxTextWidth + styles.itemInlinePadding * 2;
 }
 
+
+/**
+ * Style arrays are fixed-length while line content is not, so an extra line
+ * used to index past the end and poison the geometry with NaN (an invisible or
+ * mis-placed tooltip). Fall back to the last defined entry instead.
+ */
+function styleAt<T>(values: readonly T[], index: number, fallback: T): T {
+  return values[index] ?? values[values.length - 1] ?? fallback;
+}
+
 function determineSectionHeight(lines: string[], lineHeights: number[]) {
   let height = styles.itemBlockPadding * 1.5; // TODO: the height spacing is inconsistent across different devices...
   lines.forEach((_line, index) => {
-    height += lineHeights[index];
+    height += styleAt(lineHeights, index, 0);
   });
   return height;
 }
@@ -81,11 +90,11 @@ function calculateVerticalDrawingPositions(
   const leftTooltipHeight =
     data.tooltips.length < 1
       ? 0
-      : determineSectionHeight(data.tooltips[0].lineContent, styles.tooltipLineLineHeights);
+      : determineSectionHeight(data.tooltips[0]?.lineContent ?? [], styles.tooltipLineLineHeights);
   const rightTooltipHeight =
     data.tooltips.length < 2
       ? 0
-      : determineSectionHeight(data.tooltips[1].lineContent, styles.tooltipLineLineHeights);
+      : determineSectionHeight(data.tooltips[1]?.lineContent ?? [], styles.tooltipLineLineHeights);
   const deltaHeight = determineSectionHeight(
     [data.deltaTopLine, data.deltaBottomLine].filter(Boolean),
     styles.deltaLineHeights,
@@ -115,7 +124,8 @@ function calculateInitialTooltipPosition(
   ctx: CanvasRenderingContext2D,
   mediaSize: Size,
 ) {
-  const lines = data.tooltips[index].lineContent;
+  const tooltip = data.tooltips[index];
+  const lines = tooltip?.lineContent ?? [];
   const tooltipWidth = determineSectionWidth(
     ctx,
     lines,
@@ -124,7 +134,7 @@ function calculateInitialTooltipPosition(
   );
   const halfWidth = tooltipWidth / 2;
   const idealX = Math.min(
-    Math.max(0, data.tooltips[index].x - halfWidth),
+    Math.max(0, (tooltip?.x ?? 0) - halfWidth),
     mediaSize.width - tooltipWidth,
   );
   const leftSpace = idealX;
@@ -269,12 +279,12 @@ class DeltaTooltipPaneRenderer implements ISeriesPrimitivePaneRenderer {
         (tooltipIndex === 0 ? positions.leftTooltipTextY : positions.rightTooltipTextY);
 
       tooltip.lineContent.forEach((line: string, lineIndex: number) => {
-        ctx.font = `${styles.tooltipLineFontWeights[lineIndex]} ${styles.tooltipLineFontSizes[lineIndex]}px ${styles.fontFamily}`;
-        ctx.fillStyle = styles.tooltipLineColors[lineIndex];
+        ctx.font = `${styleAt(styles.tooltipLineFontWeights, lineIndex, 400)} ${styleAt(styles.tooltipLineFontSizes, lineIndex, 12)}px ${styles.fontFamily}`;
+        ctx.fillStyle = styleAt(styles.tooltipLineColors, lineIndex, "#000000");
         ctx.textAlign = "center";
         ctx.textBaseline = "top";
         ctx.fillText(line, x, y);
-        y += styles.tooltipLineLineHeights[lineIndex];
+        y += styleAt(styles.tooltipLineLineHeights, lineIndex, 0);
       });
     });
     ctx.restore();
@@ -288,12 +298,12 @@ class DeltaTooltipPaneRenderer implements ISeriesPrimitivePaneRenderer {
     const lines = [this._data.deltaTopLine, this._data.deltaBottomLine];
 
     lines.forEach((line: string, lineIndex: number) => {
-      ctx.font = `${styles.deltaFontWeights[lineIndex]} ${styles.deltaFontSizes[lineIndex]}px ${styles.fontFamily}`;
+      ctx.font = `${styleAt(styles.deltaFontWeights, lineIndex, 400)} ${styleAt(styles.deltaFontSizes, lineIndex, 12)}px ${styles.fontFamily}`;
       ctx.fillStyle = this._data.deltaTextColor;
       ctx.textAlign = "center";
       ctx.textBaseline = "top";
       ctx.fillText(line, x, y);
-      y += styles.deltaLineHeights[lineIndex];
+      y += styleAt(styles.deltaLineHeights, lineIndex, 0);
     });
     ctx.restore();
   }

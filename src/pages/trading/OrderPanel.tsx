@@ -171,7 +171,9 @@ export function OrderPanel({
       return;
     }
 
-    doSubmit();
+    // onError already toasts the reason — absorb the rejection so it does not
+    // surface as an unhandled promise.
+    doSubmit().catch(() => {});
   };
 
   const quickQty = [0.01, 0.05, 0.1, 0.5, 1.0];

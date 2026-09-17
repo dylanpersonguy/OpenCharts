@@ -11,6 +11,7 @@ import type { IChartApi, CandlestickData, Time } from "lightweight-charts";
 import { useEconomicCalendar, type EconomicCalendarEvent } from "../../services/queries.ts";
 import { type NewsOverlayConfig } from "./constants.ts";
 import { extractCurrencies } from "./utils.ts";
+import { safeStorage } from "../../lib/safe-storage.ts";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -39,7 +40,7 @@ export function useNewsOverlay(
   chartData: CandlestickData<Time>[],
 ): UseNewsOverlayReturn {
   const [newsConfig, setNewsConfig] = useState<NewsOverlayConfig>(() => {
-    const saved = localStorage.getItem("newsOverlayConfig");
+    const saved = safeStorage.getItem("newsOverlayConfig");
     if (saved)
       try {
         return JSON.parse(saved) as NewsOverlayConfig;
@@ -62,7 +63,7 @@ export function useNewsOverlay(
 
   // Persist news config
   useEffect(() => {
-    localStorage.setItem("newsOverlayConfig", JSON.stringify(newsConfig));
+    safeStorage.setItem("newsOverlayConfig", JSON.stringify(newsConfig));
   }, [newsConfig]);
 
   // Extract currency pair from symbol

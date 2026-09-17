@@ -180,7 +180,7 @@ export class TooltipElement {
   }
 
   private _calculateYPosition(positionData: TooltipPosition): string {
-    if (this._options.followMode == "top") {
+    if (this._options.followMode === "top") {
       return `${this._options.topOffset}px`;
     }
     const y = positionData.paneY;

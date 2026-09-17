@@ -221,7 +221,7 @@ export class TooltipPrimitive implements ISeriesPrimitive<Time> {
     const [date, time] = formattedDateAndTime(param.time ? convertTime(param.time) : undefined);
     if (this._tooltip) {
       const tooltipOptions = this._tooltip.options();
-      const topMargin = tooltipOptions.followMode == "top" ? tooltipOptions.topOffset + 10 : 0;
+      const topMargin = tooltipOptions.followMode === "top" ? tooltipOptions.topOffset + 10 : 0;
       this.setData({
         x: coordinate ?? 0,
         visible: coordinate !== null,

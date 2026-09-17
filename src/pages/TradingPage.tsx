@@ -53,6 +53,7 @@ import { useReplayChartData } from "./trading/useReplayChartData.ts";
 import { useReplayPlayback } from "./trading/useReplayPlayback.ts";
 import { getPipDigits } from "./trading/utils.ts";
 import { WatchlistPanel } from "./trading/WatchlistPanel.tsx";
+import { safeStorage } from "../lib/safe-storage.ts";
 
 type ErrorWithMessage = { message?: string };
 
@@ -98,19 +99,19 @@ export function TradingPage() {
   } = useTradingStore();
   // Chart timeframe persistence (#8)
   const [timeframe, setTimeframe] = useState<Timeframe>(() => {
-    const saved = localStorage.getItem(`tf_${selectedSymbol}`);
+    const saved = safeStorage.getItem(`tf_${selectedSymbol}`);
     return saved && TIMEFRAMES.includes(saved as Timeframe) ? (saved as Timeframe) : "15m";
   });
   const handleTimeframeChange = useCallback(
     (tf: Timeframe) => {
       setTimeframe(tf);
-      localStorage.setItem(`tf_${selectedSymbol}`, tf);
+      safeStorage.setItem(`tf_${selectedSymbol}`, tf);
     },
     [selectedSymbol],
   );
   // Restore timeframe when symbol changes
   useEffect(() => {
-    const saved = localStorage.getItem(`tf_${selectedSymbol}`);
+    const saved = safeStorage.getItem(`tf_${selectedSymbol}`);
     if (saved && TIMEFRAMES.includes(saved as Timeframe)) setTimeframe(saved as Timeframe);
   }, [selectedSymbol]);
 
@@ -152,7 +153,7 @@ export function TradingPage() {
 
   // ── Vertical resize: chart vs bottom panel ──
   const [bottomPanelHeight, setBottomPanelHeight] = useState(() => {
-    const saved = localStorage.getItem("bottomPanelHeight");
+    const saved = safeStorage.getItem("bottomPanelHeight");
     return saved ? parseInt(saved, 10) : 220;
   });
   const resizingRef = useRef(false);
@@ -177,7 +178,7 @@ export function TradingPage() {
       const onUp = () => {
         resizingRef.current = false;
         setBottomPanelHeight((h) => {
-          localStorage.setItem("bottomPanelHeight", String(h));
+          safeStorage.setItem("bottomPanelHeight", String(h));
           return h;
         });
         window.removeEventListener("mousemove", onMove);
@@ -195,7 +196,7 @@ export function TradingPage() {
 
   // (#4) One-click trading mode
   const [oneClick, setOneClick] = useState(
-    () => localStorage.getItem("oneClickTrading") === "true",
+    () => safeStorage.getItem("oneClickTrading") === "true",
   );
 
   // Trade sound effect
@@ -203,7 +204,7 @@ export function TradingPage() {
   const toggleOneClick = useCallback(() => {
     setOneClick((prev) => {
       const v = !prev;
-      localStorage.setItem("oneClickTrading", String(v));
+      safeStorage.setItem("oneClickTrading", String(v));
       return v;
     });
   }, []);
@@ -282,6 +283,28 @@ export function TradingPage() {
     [activeAccountId, queryClient, isFeedConnected],
   );
 
+  // Single submit path for the order flows that bypass the usePlaceOrder
+  // mutation (chart context menu, mobile panel). Rejections used to be
+  // swallowed here, so a rejected order was indistinguishable from a fill.
+  // Toasts the reason, refreshes the caches, and rethrows so callers can skip
+  // their success side-effects.
+  const submitOrderDirect = useCallback(
+    async (input: PlaceOrderInput) => {
+      try {
+        const order = await api.placeOrder(input);
+        if (activeAccountId) {
+          queryClient.invalidateQueries({ queryKey: ["orders", activeAccountId] });
+          queryClient.invalidateQueries({ queryKey: ["positions", activeAccountId] });
+        }
+        return order;
+      } catch (err) {
+        toast.error("Order Failed", getErrorMessage(err));
+        throw err;
+      }
+    },
+    [activeAccountId, queryClient],
+  );
+
   // Chart context-menu quick orders (Buy/Sell limit/stop at the clicked price).
   // Always routes through the confirm dialog so a stray right-click can never
   // place an order directly.
@@ -306,10 +329,10 @@ export function TradingPage() {
         quantity: 1,
         price: type === "LIMIT" ? price : undefined,
         stopPrice: type === "STOP" ? price : undefined,
-        _submit: () => api.placeOrder(input),
+        _submit: () => submitOrderDirect(input),
       });
     },
-    [activeAccountId, selectedSymbol],
+    [activeAccountId, selectedSymbol, submitOrderDirect],
   );
 
   const handleClearIndicators = useCallback(() => {
@@ -644,16 +667,27 @@ export function TradingPage() {
               positions={positions || []}
               onPlaceOrder={(order) => {
                 if (oneClick) {
-                  api
-                    .placeOrder({ ...order, accountId: activeAccountId! } as PlaceOrderInput)
-                    .catch(() => {});
+                  void submitOrderDirect({
+                    ...order,
+                    accountId: activeAccountId!,
+                  } as PlaceOrderInput)
+                    .then(() => {
+                      playTradeSound();
+                      handleFirstTrade();
+                    })
+                    .catch(() => {
+                      // Already reported by submitOrderDirect.
+                    });
                   setMobilePanelOpen(false);
                   return;
                 }
                 setConfirmOrder({
                   ...order,
                   _submit: () =>
-                    api.placeOrder({ ...order, accountId: activeAccountId! } as PlaceOrderInput),
+                    submitOrderDirect({
+                      ...order,
+                      accountId: activeAccountId!,
+                    } as PlaceOrderInput),
                 });
                 setMobilePanelOpen(false);
               }}
@@ -687,6 +721,10 @@ export function TradingPage() {
               .then(() => {
                 playTradeSound();
                 handleFirstTrade();
+              })
+              .catch(() => {
+                // Submit paths toast their own failure reason; swallow here so
+                // the rejection never escapes as an unhandled promise.
               })
               .finally(() => {
                 setConfirmLoading(false);

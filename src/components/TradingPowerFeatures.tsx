@@ -28,6 +28,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn, formatCurrency } from "@/lib/utils";
+import { safeStorage } from "../lib/safe-storage.ts";
 
 // ── Price Alert Manager (#53) ────────────────────────────────
 interface PriceAlert {
@@ -42,7 +43,7 @@ interface PriceAlert {
 export function PriceAlertManager({ symbol }: { symbol: string }) {
   const [alerts, setAlerts] = useState<PriceAlert[]>(() => {
     try {
-      return JSON.parse(localStorage.getItem("price_alerts") || "[]");
+      return JSON.parse(safeStorage.getItem("price_alerts") || "[]");
     } catch {
       return [];
     }
@@ -53,7 +54,7 @@ export function PriceAlertManager({ symbol }: { symbol: string }) {
 
   function saveAlerts(newAlerts: PriceAlert[]) {
     setAlerts(newAlerts);
-    localStorage.setItem("price_alerts", JSON.stringify(newAlerts));
+    safeStorage.setItem("price_alerts", JSON.stringify(newAlerts));
   }
 
   function addAlert() {

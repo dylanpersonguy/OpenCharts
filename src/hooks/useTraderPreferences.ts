@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../services/api.ts";
 import { useAuthStore } from "../services/store.tsx";
+import { safeStorage } from "../lib/safe-storage.ts";
 
 export type TraderPrefs = Record<string, string>;
 
@@ -22,13 +23,13 @@ function parsePrefs(raw: string | null): TraderPrefs {
 }
 
 export function readTraderPrefs(userId?: string | null): TraderPrefs {
-  const scoped = parsePrefs(localStorage.getItem(getTraderPrefsStorageKey(userId)));
+  const scoped = parsePrefs(safeStorage.getItem(getTraderPrefsStorageKey(userId)));
   if (Object.keys(scoped).length > 0) return scoped;
-  return parsePrefs(localStorage.getItem(LEGACY_TRADER_PREFS_KEY));
+  return parsePrefs(safeStorage.getItem(LEGACY_TRADER_PREFS_KEY));
 }
 
 export function writeTraderPrefs(prefs: TraderPrefs, userId?: string | null): void {
-  localStorage.setItem(getTraderPrefsStorageKey(userId), JSON.stringify(prefs));
+  safeStorage.setItem(getTraderPrefsStorageKey(userId), JSON.stringify(prefs));
 }
 
 export function applyAccentColorFromPrefs(prefs: TraderPrefs): void {
@@ -54,7 +55,7 @@ export function useTraderPreferences() {
 
     api
       .getPreferences()
-      .then((serverPrefs) => {
+      .then((serverPrefs: TraderPrefs | null) => {
         if (serverPrefs && typeof serverPrefs === "object") {
           const merged = { ...serverPrefs, ...local };
           setPrefs(merged);

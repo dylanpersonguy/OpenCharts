@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { TradingPage } from "./pages/TradingPage.tsx";
 import { useAuthStore, useTradingStore } from "./services/store.tsx";
+import { safeStorage } from "./lib/safe-storage.ts";
 
 /**
  * OpenCharts entry point.
@@ -21,7 +22,7 @@ export function App() {
       await demoLogin();
       // OpenCharts paper trades genuinely execute against the in-browser engine,
       // so this is a real (non-demo) session — clears the "trading disabled" gate.
-      localStorage.setItem("is_demo", "false");
+      safeStorage.setItem("is_demo", "false");
       useAuthStore.setState({ isDemo: false });
       await Promise.all([loadSymbols(), loadAccounts()]);
       if (!cancelled) setReady(true);
