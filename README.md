@@ -294,7 +294,7 @@ src/
 ├─ App.tsx                  # boots the demo session, renders the terminal
 ├─ main.tsx                 # React entry, providers, MarketDataBridge, chunk-reload guard
 ├─ pages/
-│  ├─ TradingPage.tsx       # the full terminal layout (~700 lines)
+│  ├─ TradingPage.tsx       # the default layout, composed from the panels
 │  ├─ AiTraderPage.tsx      # stub — the AI trader is gated off
 │  └─ trading/              # chart, toolbars, order panel, DOM, watchlist,
 │                           #   drawing rail, object tree, replay HUD/scrubber,
@@ -310,6 +310,10 @@ src/
 │  └─ utils.ts
 ├─ components/              # dialogs, mobile panel, TradingView embeds, ui primitives
 ├─ hooks/                   # drawings, chart prefs, trader prefs, trade sound…
+├─ terminal/               # composable terminal pieces
+│  ├─ context.tsx          #   <TerminalProvider>: the state the panels share
+│  ├─ panels.tsx           #   <Chart>, <OrderTicket>, <Positions>, …
+│  └─ Terminal.tsx         #   the full terminal in its default layout
 ├─ adapter/                # the public integration surface
 │  ├─ types.ts             #   the OpenChartsAdapter contract
 │  ├─ provider.tsx         #   <OpenChartsProvider adapter={...}>
@@ -521,6 +525,39 @@ runAdapterConformance("my-broker", () => createMyAdapter(), { symbol: "BTCUSD" }
 
 Trading checks submit and close orders, so they are opt-in
 (`allowTrading: true`) — **run them against a paper or sandbox gateway only.**
+
+### Compose your own layout
+
+`<Terminal />` is the full terminal in its default arrangement. To put the chart
+in your own dashboard, mount the panels individually instead — each reads what
+it needs from `<TerminalProvider>`, so they stay in sync without prop drilling:
+
+```tsx
+<OpenChartsProvider adapter={myAdapter}>
+  <TerminalProvider>
+    <main><Chart /></main>
+    <aside>
+      <Watchlist />
+      <OrderTicket />
+    </aside>
+    <footer><Positions /></footer>
+  </TerminalProvider>
+</OpenChartsProvider>
+```
+
+| Panel | What it is |
+| --- | --- |
+| `<Chart />` | Candles, indicators, drawing tools, position overlays, replay |
+| `<OrderTicket />` | Market / limit / stop entry with take-profit and stop-loss |
+| `<Positions />` | Open positions with close, partial close and modify |
+| `<Orders />` | Working orders with cancel and modify |
+| `<Watchlist />` | Instruments with live prices |
+| `<DepthLadder />` | Depth ladder around the mid price |
+
+`TerminalProvider` holds only shared *state* — the charted symbol, timeframe,
+account, drawings, positions — plus the confirm and modify dialogs, so every
+composition gets them. Layout is entirely yours. A full example is in
+[`examples/embedded-chart/`](examples/embedded-chart/).
 
 ### A worked example
 

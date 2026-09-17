@@ -18,6 +18,11 @@ major version is `0`, minor releases may contain breaking changes.
   exclusive `toMs` paging window, unsubscribe actually unsubscribing, and
   rejections arriving as rejected promises. Trading checks are opt-in because
   they submit orders.
+- **Composable panels.** `<Chart />`, `<OrderTicket />`, `<Positions />`,
+  `<Orders />`, `<Watchlist />` and `<DepthLadder />` can be mounted
+  individually inside `<TerminalProvider>`, so an application can put the chart
+  in its own layout instead of taking the whole terminal. `<Terminal />` is the
+  default arrangement, and `examples/embedded-chart/` shows a custom one.
 - **A live example adapter** for Binance's public API in
   `examples/binance-adapter/`, composed with the paper engine so live prices
   can be traded risk-free. Run it with `VITE_ADAPTER=binance npm run dev`.
@@ -29,6 +34,9 @@ major version is `0`, minor releases may contain breaking changes.
   demo is expressed through the same public contract a third party implements.
 - Session replay is built on `marketData.getCandles`, so it works with any
   adapter instead of requiring one of its own.
+- The 740-line trading page no longer owns the terminal's state. Shared state
+  moved to `<TerminalProvider>`; the page keeps only layout — panel sizes, tab
+  selection, visibility — and its markup is unchanged.
 - Drawings, chart templates and journal entries route through the adapter's
   optional `storage` driver, defaulting to `localStorage`. Device-local
   preferences deliberately stay local.

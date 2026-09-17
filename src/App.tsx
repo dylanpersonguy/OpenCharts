@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { TradingPage } from "./pages/TradingPage.tsx";
+import { Terminal } from "./terminal/Terminal.tsx";
 import { useAuthStore, useTradingStore } from "./services/store.tsx";
 import { safeStorage } from "./lib/safe-storage.ts";
 
@@ -41,5 +41,5 @@ export function App() {
     );
   }
 
-  return <TradingPage />;
+  return <Terminal />;
 }

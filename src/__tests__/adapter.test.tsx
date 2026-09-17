@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createDemoAdapter } from "@/adapter/demo";
 import { runAdapterConformance } from "@/adapter/conformance";
 import { __clearAdapter, getAdapter, hasAdapter, setAdapter } from "@/adapter/registry";
@@ -56,5 +56,41 @@ describe("market-data-only adapters", () => {
     expect(symbols.length).toBeGreaterThan(0);
 
     await expect(api.getMyAccounts()).rejects.toThrow(/trading is not available/i);
+  });
+});
+
+describe("terminal composition", () => {
+  it("refuses to render a panel outside TerminalProvider, with a usable message", async () => {
+    const { render } = await import("@testing-library/react");
+    const { OrderTicket } = await import("@/terminal/panels");
+    setAdapter(createDemoAdapter());
+
+    // React logs the error it re-throws; keep the test output readable.
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => render(<OrderTicket />)).toThrow(/TerminalProvider/);
+    spy.mockRestore();
+  });
+
+  it("shares one symbol across independently mounted panels", async () => {
+    const { render, screen, waitFor } = await import("@testing-library/react");
+    const { QueryClient, QueryClientProvider } = await import("@tanstack/react-query");
+    const { TerminalProvider } = await import("@/terminal/context");
+    const { OrderTicket } = await import("@/terminal/panels");
+    const { useTradingStore } = await import("@/services/store");
+
+    setAdapter(createDemoAdapter());
+    useTradingStore.setState({ selectedSymbol: "ETHUSD", activeAccountId: "demo" });
+
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <TerminalProvider>
+          <OrderTicket />
+        </TerminalProvider>
+      </QueryClientProvider>,
+    );
+
+    // The ticket reads the charted symbol from the provider, not from props.
+    await waitFor(() => expect(screen.getByText(/ETHUSD/)).toBeInTheDocument());
   });
 });

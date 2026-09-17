@@ -1,149 +1,97 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useIsFeedConnected } from "../components/ConnectionIndicator.tsx";
+import { useCallback, useRef, useState } from "react";
 import { MobileAccountBar, MobileTradingPanel } from "../components/MobileTradingPanel.tsx";
-import {
-  OrderConfirmDialog,
-  OrderModifyDialog,
-  PositionModifyDialog,
-} from "../components/TradingDialogs.tsx";
 import { NewsFeed as MarketNewsFeed } from "../components/TradingPowerFeatures.tsx";
 import { TradingViewTechnicalAnalysis } from "../components/TradingViewWidgets.tsx";
-import { useChartDrawings } from "../hooks/useChartDrawings.ts";
-import {
-  getChartPreferencesFromStorage,
-  updateChartPreferences,
-  useChartPreferences,
-} from "../hooks/useChartPreferences.ts";
-import { useTradeSound } from "../hooks/useTradeSound";
 import type { IndicatorType } from "../lib/indicators.ts";
-import { posthog } from "../lib/posthog";
-import type { CreateJournalEntryInput, UpdateJournalEntryInput } from "../services/api/journal.ts";
-import { api } from "../services/api.ts";
-import {
-  useCandles,
-  useCreateJournalEntry,
-  useDeleteJournalEntry,
-  useJournalEntries,
-  useOrders,
-  usePositions,
-  useSymbols,
-  useUpdateJournalEntry,
-} from "../services/queries.ts";
-import type { Order, PlaceOrderInput, Position, Symbol } from "../services/schemas.ts";
+import { safeStorage } from "../lib/safe-storage.ts";
+import type { PlaceOrderInput } from "../services/schemas.ts";
+import { updateChartPreferences } from "../hooks/useChartPreferences.ts";
 import { useTradingStore } from "../services/store.tsx";
-import { toast } from "../services/toast.ts";
+import { useTerminal } from "../terminal/use-terminal.ts";
 import { BottomPanel } from "./trading/BottomPanel.tsx";
 import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
-import {
-  type DrawingTool,
-  type MagnetMode,
-  REPLAY_ENABLED,
-  TIMEFRAMES,
-  type Timeframe,
-} from "./trading/constants.ts";
+import { REPLAY_ENABLED } from "./trading/constants.ts";
 import { DOMPanel } from "./trading/DOMPanel.tsx";
 import { MarketClosedBanner } from "./trading/MarketClosedBanner.tsx";
 import { OrderPanel } from "./trading/OrderPanel.tsx";
 import { ReplayScrubber } from "./trading/ReplayScrubber.tsx";
-import { useReplayChartData } from "./trading/useReplayChartData.ts";
-import { useReplayPlayback } from "./trading/useReplayPlayback.ts";
-import { getPipDigits } from "./trading/utils.ts";
 import { WatchlistPanel } from "./trading/WatchlistPanel.tsx";
-import { safeStorage } from "../lib/safe-storage.ts";
 
-type ErrorWithMessage = { message?: string };
-
-type ConfirmOrderState = {
-  symbol: string;
-  side: "BUY" | "SELL";
-  type: string;
-  quantity: number;
-  price?: number;
-  stopPrice?: number;
-  takeProfit?: number;
-  stopLoss?: number;
-  _submit: () => Promise<unknown>;
-} | null;
-
-/** Stored timeframe for a symbol, or the 15m default. */
-function readStoredTimeframe(symbol: string): Timeframe {
-  const saved = safeStorage.getItem(`tf_${symbol}`);
-  return saved && TIMEFRAMES.includes(saved as Timeframe) ? (saved as Timeframe) : "15m";
-}
-
-function getErrorMessage(err: unknown): string {
-  if (err && typeof err === "object" && "message" in err) {
-    const message = (err as ErrorWithMessage).message;
-    if (typeof message === "string" && message.length > 0) return message;
-  }
-  return "Request failed";
-}
+/**
+ * The default terminal layout.
+ *
+ * All shared state comes from `<TerminalProvider>` (see src/terminal/context)
+ * — this component only arranges the panels and owns the layout: panel sizes,
+ * which tab is open, what is visible. Applications that want a different
+ * arrangement compose the panels from `src/terminal/panels.tsx` instead of
+ * modifying this file.
+ */
 
 export function TradingPage() {
-  const hasTrackedFirstTrade = useRef(false);
-
-  const handleFirstTrade = useCallback(() => {
-    if (!hasTrackedFirstTrade.current) {
-      hasTrackedFirstTrade.current = true;
-      posthog.capture("funnel.trade.first_executed", { sessionId: posthog.get_session_id?.() });
-    }
-  }, []);
-
+  // Shared terminal state lives in <TerminalProvider>; this component is the
+  // default layout on top of it. Panel sizes, tab selection and visibility are
+  // layout concerns, so they stay here.
   const {
     selectedSymbol,
     setSelectedSymbol,
-    ticks,
-    updateTick,
-    activeAccountId,
-    symbols: _storeSymbols,
-    replayVersion,
+    symbols,
+    symbolInfo,
+    pipDigits,
+    tick,
+    isDark,
+    timeframe,
+    setTimeframe: handleTimeframeChange,
+    candles,
+    liveCandle,
+    replayCandles,
+    replayTradeEvents,
     isReplaying,
-  } = useTradingStore();
-  // Chart timeframe persistence (#8). Held per symbol in one map so switching
-  // symbols reads the stored timeframe during render — no reset effect, and no
-  // frame where the chart shows the previous symbol's timeframe.
-  const [timeframeBySymbol, setTimeframeBySymbol] = useState<Partial<Record<string, Timeframe>>>(
-    {},
-  );
-  const timeframe: Timeframe =
-    timeframeBySymbol[selectedSymbol] ?? readStoredTimeframe(selectedSymbol);
-  const handleTimeframeChange = useCallback(
-    (tf: Timeframe) => {
-      setTimeframeBySymbol((prev) => ({ ...prev, [selectedSymbol]: tf }));
-      safeStorage.setItem(`tf_${selectedSymbol}`, tf);
-    },
-    [selectedSymbol],
-  );
-
-  const [activeIndicators, setActiveIndicators] = useState<IndicatorType[]>([]);
-  const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
-  const [drawingTool, setDrawingTool] = useState<DrawingTool>("none");
-  const {
+    chartPrefs,
+    activeIndicators,
+    toggleIndicator,
+    clearIndicators: handleClearIndicators,
+    activePlugins,
+    togglePlugin: handleTogglePlugin,
+    setPlugins: handleSetPlugins,
+    cycleMagnetMode,
+    drawingTool,
+    setDrawingTool,
     drawings,
     addDrawing,
     updateDrawing,
     removeDrawing,
     clearDrawings,
-    undo: undoDrawing,
-    redo: redoDrawing,
-  } = useChartDrawings(selectedSymbol, timeframe);
-  const [activePlugins, setActivePlugins] = useState<string[]>(
-    () => getChartPreferencesFromStorage().activePlugins,
-  );
-  const handleTogglePlugin = useCallback((id: string) => {
-    setActivePlugins((prev) => {
-      const next = prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id];
-      updateChartPreferences({ activePlugins: next });
-      return next;
-    });
-  }, []);
-  // Template load — replace the whole plugin list at once.
-  const handleSetPlugins = useCallback((ids: string[]) => {
-    setActivePlugins(ids);
-    updateChartPreferences({ activePlugins: ids });
-  }, []);
+    undoDrawing,
+    redoDrawing,
+    activeAccountId,
+    account,
+    positions,
+    orders,
+    positionPnl,
+    chartPositions,
+    chartOrders,
+    isFeedConnected,
+    oneClick,
+    toggleOneClick,
+    soundMuted,
+    toggleSoundMute,
+    onOrderSuccess,
+    requestOrderConfirmation: setConfirmOrder,
+    submitOrderDirect,
+    quickOrder: handleQuickOrder,
+    modifyPositionLevels: handleChartModifyPosition,
+    editPosition: setModifyingPosition,
+    editOrder: setModifyingOrder,
+    journalEntries,
+    journalLoading,
+    createJournal,
+    updateJournal,
+    deleteJournal,
+  } = useTerminal();
+
+  // ── Layout state ──
+  const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
   const [bottomTab, setBottomTab] = useState<
     "positions" | "orders" | "history" | "journal" | "calendar" | "news"
   >("positions");
@@ -151,6 +99,7 @@ export function TradingPage() {
     "order" | "dom" | "watchlist" | "news" | "tv-analysis"
   >("order");
   const [showRightPanel, setShowRightPanel] = useState(true);
+  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
 
   // ── Vertical resize: chart vs bottom panel ──
   const [bottomPanelHeight, setBottomPanelHeight] = useState(() => {
@@ -195,242 +144,19 @@ export function TradingPage() {
     [bottomPanelHeight],
   );
 
-  // (#4) One-click trading mode
-  const [oneClick, setOneClick] = useState(
-    () => safeStorage.getItem("oneClickTrading") === "true",
-  );
-
-  // Trade sound effect
-  const { muted: soundMuted, toggleMute: toggleSoundMute, playTradeSound } = useTradeSound();
-  const toggleOneClick = useCallback(() => {
-    setOneClick((prev) => {
-      const v = !prev;
-      safeStorage.setItem("oneClickTrading", String(v));
-      return v;
-    });
-  }, []);
-
-  // (#6) Position modify dialog
-  const [modifyingPosition, setModifyingPosition] = useState<Position | null>(null);
-
-  // (#30) Order modify dialog
-  const [modifyingOrder, setModifyingOrder] = useState<Order | null>(null);
-
-  // (#7) Order confirmation dialog
-  const [confirmOrder, setConfirmOrder] = useState<ConfirmOrderState>(null);
-  const [confirmLoading, setConfirmLoading] = useState(false);
-
-  const queryClient = useQueryClient();
-  const { data: symbols = [] } = useSymbols();
-  const isFeedConnected = useIsFeedConnected();
-
-  // Prime the active symbol with a fresh server-side snapshot immediately on
-  // symbol switch so bid/ask appears without waiting for the next WS tick.
-  useEffect(() => {
-    let cancelled = false;
-    void api
-      .getTick(selectedSymbol)
-      .then((tick) => {
-        if (cancelled || !tick) return;
-        updateTick(
-          selectedSymbol,
-          Number(tick.bid),
-          Number(tick.ask),
-          typeof tick.timestamp === "number" ? tick.timestamp : Date.now(),
-        );
-      })
-      .catch(() => {
-        // Ignore snapshot misses; WS stream remains authoritative.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [selectedSymbol, updateTick]);
-
-  // Handler for chart drag-to-edit SL/TP levels
-  const handleChartModifyPosition = useCallback(
-    async (positionId: string, mods: { takeProfit?: number | null; stopLoss?: number | null }) => {
-      if (!isFeedConnected) {
-        toast.warning(
-          "No Data Feed",
-          "Cannot modify positions while disconnected from the data feed",
-        );
-        if (activeAccountId)
-          queryClient.invalidateQueries({
-            queryKey: ["positions", activeAccountId],
-          });
-        return;
-      }
-      try {
-        await api.modifyPosition(positionId, mods);
-        const field = mods.takeProfit !== undefined ? "TP" : "SL";
-        const price = mods.takeProfit !== undefined ? mods.takeProfit : mods.stopLoss;
-        toast.success(`${field} Updated`, `${field} set to ${price}`);
-        if (activeAccountId) {
-          queryClient.invalidateQueries({
-            queryKey: ["positions", activeAccountId],
-          });
-        }
-      } catch (err: unknown) {
-        toast.error("Modify Failed", getErrorMessage(err));
-        // Refetch to revert price line to original value
-        if (activeAccountId) {
-          queryClient.invalidateQueries({
-            queryKey: ["positions", activeAccountId],
-          });
-        }
-      }
+  // Loading a chart template swaps the whole indicator list; the toolbar's
+  // own menu toggles one at a time.
+  const setIndicators = useCallback(
+    (next: IndicatorType[]) => {
+      for (const type of next) if (!activeIndicators.includes(type)) toggleIndicator(type);
+      for (const type of activeIndicators) if (!next.includes(type)) toggleIndicator(type);
     },
-    [activeAccountId, queryClient, isFeedConnected],
+    [activeIndicators, toggleIndicator],
   );
-
-  // Single submit path for the order flows that bypass the usePlaceOrder
-  // mutation (chart context menu, mobile panel). Rejections used to be
-  // swallowed here, so a rejected order was indistinguishable from a fill.
-  // Toasts the reason, refreshes the caches, and rethrows so callers can skip
-  // their success side-effects.
-  const submitOrderDirect = useCallback(
-    async (input: PlaceOrderInput) => {
-      try {
-        const order = await api.placeOrder(input);
-        if (activeAccountId) {
-          queryClient.invalidateQueries({ queryKey: ["orders", activeAccountId] });
-          queryClient.invalidateQueries({ queryKey: ["positions", activeAccountId] });
-        }
-        return order;
-      } catch (err) {
-        toast.error("Order Failed", getErrorMessage(err));
-        throw err;
-      }
-    },
-    [activeAccountId, queryClient],
-  );
-
-  // Chart context-menu quick orders (Buy/Sell limit/stop at the clicked price).
-  // Always routes through the confirm dialog so a stray right-click can never
-  // place an order directly.
-  const handleQuickOrder = useCallback(
-    (side: "BUY" | "SELL", type: "LIMIT" | "STOP", price: number) => {
-      if (!activeAccountId) {
-        toast.warning("No Account", "Select an account before placing orders");
-        return;
-      }
-      const input: PlaceOrderInput = {
-        accountId: activeAccountId,
-        symbol: selectedSymbol,
-        side,
-        type,
-        quantity: 1,
-        ...(type === "LIMIT" ? { price } : { stopPrice: price }),
-      };
-      setConfirmOrder({
-        symbol: selectedSymbol,
-        side,
-        type,
-        quantity: 1,
-        price: type === "LIMIT" ? price : undefined,
-        stopPrice: type === "STOP" ? price : undefined,
-        _submit: () => submitOrderDirect(input),
-      });
-    },
-    [activeAccountId, selectedSymbol, submitOrderDirect],
-  );
-
-  const handleClearIndicators = useCallback(() => {
-    setActiveIndicators([]);
-  }, []);
-
-  // Deep-history target used after the initial fast render completes.
-  const deepCandleLimit = useMemo(() => {
-    switch (timeframe) {
-      case "1m":
-        return 3_000;
-      case "5m":
-        return 5_000;
-      case "15m":
-        return 12_000;
-      case "30m":
-        return 8_000;
-      case "1h":
-        return 8_760;
-      case "4h":
-        return 2_500;
-      case "1d":
-        return 1_000;
-      case "1w":
-        return 520;
-      default:
-        return 5_000;
-    }
-  }, [timeframe]);
-  // First paint: viewport-sized so the initial fetch is as small as possible.
-  // Mobile (<768px) needs fewer bars to fill the screen; desktop gets more.
-  // The deep-history fetch fires 400ms later and loads a full year of data.
-  const firstPaintCandleLimit = useMemo(() => {
-    const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-    return isMobile ? 500 : 400;
-  }, []);
-  // Which (symbol, timeframe) the deep-history fetch has been unlocked for.
-  // Deriving the limit from that tag means a symbol or timeframe switch drops
-  // back to the small first-paint request during render, with no reset effect.
-  const chartKey = `${selectedSymbol}:${timeframe}`;
-  const [deepenedFor, setDeepenedFor] = useState<string | null>(null);
-  const candleLimit = deepenedFor === chartKey ? deepCandleLimit : firstPaintCandleLimit;
-  useEffect(() => {
-    // Wait long enough for the first-paint response to arrive and render
-    // before firing the heavier deep-history request. 400 ms is a reasonable
-    // budget for a cached/warm response; users on fast connections will
-    // see data before the deep load starts, avoiding visible re-draws.
-    const timer = window.setTimeout(() => setDeepenedFor(chartKey), 400);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [chartKey]);
-  const { data: candles = [] } = useCandles(selectedSymbol, timeframe, candleLimit, replayVersion);
-  // Replay: sliced 1m buffer + trade-event markers; null when not replaying.
-  // While replayCandles is set, the live tick/candle feed is suppressed below
-  // so real-time data can't paint over the playback.
-  const { replayCandles, replayTradeEvents } = useReplayChartData(activeAccountId);
-  const chartPrefs = useChartPreferences();
-  const cycleMagnetMode = useCallback(() => {
-    const order: MagnetMode[] = ["none", "weak", "strong"];
-    const next = order[(order.indexOf(chartPrefs.magnetMode) + 1) % order.length] ?? "none";
-    updateChartPreferences({ magnetMode: next });
-  }, [chartPrefs.magnetMode]);
-  useReplayPlayback(activeAccountId ?? "");
-  const { data: positions = [] } = usePositions(activeAccountId);
-  const { data: orders = [] } = useOrders(activeAccountId);
-  const chartPositions = chartPrefs.overlayPositionsOnChart ? positions : [];
-  const chartOrders = chartPrefs.overlayPositionsOnChart ? orders : [];
-  const positionPnl = useMemo(
-    () => positions.reduce((sum, position) => sum + (position.unrealizedPnl || 0), 0),
-    [positions],
-  );
-
-  // (#26) Trade journal
-  const { data: journalData, isLoading: journalLoading } = useJournalEntries(activeAccountId);
-  const createJournal = useCreateJournalEntry();
-  const updateJournal = useUpdateJournalEntry();
-  const deleteJournal = useDeleteJournalEntry();
-
-  // Get account data for risk display
-  const account = useTradingStore((s) => s.accounts.find((a) => a.id === activeAccountId));
-
-  const tick = ticks[selectedSymbol];
-  const symbolInfo = symbols.find((s) => s.name === selectedSymbol) as Symbol | undefined;
-  const liveCandleUpdates = useTradingStore((s) => s.liveCandleUpdates);
-  const liveCandle = liveCandleUpdates[`${selectedSymbol}:${timeframe}`];
-  const pipDigits = useMemo(
-    () => getPipDigits(symbolInfo, selectedSymbol),
-    [symbolInfo, selectedSymbol],
-  );
-
-  const isDark = !document.documentElement.classList.contains("light");
-
-  // Mobile trading state
-  const [mobilePanelOpen, setMobilePanelOpen] = useState(false);
+  const ticks = useTradingStore((s) => s.ticks);
 
   return (
+
     <div className="flex flex-col h-full overflow-hidden">
       {/* ── Mobile Account Bar (small screens only) ────── */}
       <div className="md:hidden">
@@ -450,11 +176,7 @@ export function TradingPage() {
         timeframe={timeframe}
         onTimeframeChange={handleTimeframeChange}
         activeIndicators={activeIndicators}
-        onToggleIndicator={(type) =>
-          setActiveIndicators((prev) =>
-            prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type],
-          )
-        }
+        onToggleIndicator={toggleIndicator}
         showIndicatorMenu={showIndicatorMenu}
         onToggleIndicatorMenu={() => setShowIndicatorMenu((v) => !v)}
         drawingTool={drawingTool}
@@ -471,7 +193,7 @@ export function TradingPage() {
         replayAccountId={activeAccountId}
         activePlugins={activePlugins}
         onTogglePlugin={handleTogglePlugin}
-        onSetIndicators={setActiveIndicators}
+        onSetIndicators={setIndicators}
         onSetPlugins={handleSetPlugins}
         magnetMode={chartPrefs.magnetMode}
         onCycleMagnet={cycleMagnetMode}
@@ -490,7 +212,7 @@ export function TradingPage() {
           {/* Chart Area */}
           <div className="flex-1 min-h-[200px] relative">
             <ChartPanel
-              candles={replayCandles ?? candles}
+              candles={replayCandles ?? candles ?? []}
               selectedSymbol={selectedSymbol}
               timeframe={replayCandles ? "1m" : timeframe}
               isDark={isDark}
@@ -552,35 +274,11 @@ export function TradingPage() {
             onSelectOrderSymbol={setSelectedSymbol}
             height={bottomPanelHeight}
             isFeedConnected={isFeedConnected}
-            journalEntries={journalData?.entries || []}
+            journalEntries={journalEntries}
             journalLoading={journalLoading}
-            onCreateJournal={(data: CreateJournalEntryInput) =>
-              createJournal.mutate(data, {
-                onSuccess: () => toast.success("Journal", "Entry saved"),
-                onError: (err: unknown) =>
-                  toast.error("Journal", getErrorMessage(err) || "Failed to save"),
-              })
-            }
-            onUpdateJournal={(id: string, data: UpdateJournalEntryInput) =>
-              updateJournal.mutate(
-                { id, accountId: activeAccountId!, ...data },
-                {
-                  onSuccess: () => toast.success("Journal", "Entry updated"),
-                  onError: (err: unknown) =>
-                    toast.error("Journal", getErrorMessage(err) || "Failed to update"),
-                },
-              )
-            }
-            onDeleteJournal={(id: string) =>
-              deleteJournal.mutate(
-                { id, accountId: activeAccountId! },
-                {
-                  onSuccess: () => toast.success("Journal", "Entry deleted"),
-                  onError: (err: unknown) =>
-                    toast.error("Journal", getErrorMessage(err) || "Failed to delete"),
-                },
-              )
-            }
+            onCreateJournal={createJournal}
+            onUpdateJournal={updateJournal}
+            onDeleteJournal={deleteJournal}
           />
         </div>
 
@@ -600,10 +298,7 @@ export function TradingPage() {
                 isFeedConnected={isFeedConnected}
                 soundMuted={soundMuted}
                 onToggleMute={toggleSoundMute}
-                onOrderSuccess={() => {
-                  playTradeSound();
-                  handleFirstTrade();
-                }}
+                onOrderSuccess={onOrderSuccess}
               />
             )}
             {rightPanel === "dom" && <DOMPanel symbol={selectedSymbol} tick={tick} />}
@@ -667,10 +362,7 @@ export function TradingPage() {
                     ...order,
                     accountId: activeAccountId!,
                   } as PlaceOrderInput)
-                    .then(() => {
-                      playTradeSound();
-                      handleFirstTrade();
-                    })
+                    .then(onOrderSuccess)
                     .catch(() => {
                       // Already reported by submitOrderDirect.
                     });
@@ -678,7 +370,8 @@ export function TradingPage() {
                   return;
                 }
                 setConfirmOrder({
-                  ...order,
+                  ...(order as PlaceOrderInput),
+                  accountId: activeAccountId!,
                   _submit: () =>
                     submitOrderDirect({
                       ...order,
@@ -692,49 +385,7 @@ export function TradingPage() {
         )}
       </div>
 
-      {/* Dialogs */}
-      <PositionModifyDialog
-        key={modifyingPosition?.id ?? "no-position"}
-        position={modifyingPosition}
-        onClose={() => setModifyingPosition(null)}
-        onSaved={() => setModifyingPosition(null)}
-        tick={tick}
-        isFeedConnected={isFeedConnected}
-      />
-      <OrderModifyDialog
-        key={modifyingOrder?.id ?? "no-order"}
-        order={modifyingOrder}
-        onClose={() => setModifyingOrder(null)}
-        onSaved={() => setModifyingOrder(null)}
-        tick={tick}
-      />
-      <OrderConfirmDialog
-        isOpen={!!confirmOrder}
-        order={confirmOrder}
-        onConfirm={() => {
-          if (confirmOrder?._submit) {
-            setConfirmLoading(true);
-            confirmOrder
-              ._submit()
-              .then(() => {
-                playTradeSound();
-                handleFirstTrade();
-              })
-              .catch(() => {
-                // Submit paths toast their own failure reason; swallow here so
-                // the rejection never escapes as an unhandled promise.
-              })
-              .finally(() => {
-                setConfirmLoading(false);
-                setConfirmOrder(null);
-              });
-          }
-        }}
-        onCancel={() => setConfirmOrder(null)}
-        tick={tick}
-        symbolInfo={symbolInfo}
-        loading={confirmLoading}
-      />
     </div>
   );
 }
+
