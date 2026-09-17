@@ -1,0 +1,52 @@
+name: Feature request
+description: Suggest an indicator, tool, or capability
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: >
+        Describe the situation rather than the solution — it often has a
+        simpler answer than the feature you had in mind.
+      placeholder: |
+        I'm embedding the chart in our exchange and need drawings to sync to
+        a user's account rather than to their browser ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like to see?
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the terminal?
+      options:
+        - Charting
+        - Drawing tools
+        - Indicators
+        - Order flow / paper engine
+        - Session replay
+        - Integration (using OpenCharts with my own backend)
+        - Theming / layout
+        - Docs
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What have you tried or considered?
+
+  - type: checkboxes
+    id: contribute
+    attributes:
+      label: Would you be up for building it?
+      options:
+        - label: I'd be willing to open a PR for this, with some guidance

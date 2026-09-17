@@ -1,12 +1,13 @@
 {
   "name": "opencharts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
     "dev:ci": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
+    "check:size": "node scripts/check-bundle-size.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
@@ -55,5 +56,18 @@
     "typescript-eslint": "^8.70.0",
     "vite": "^6.0.0",
     "vitest": "^2.1.9"
+  },
+  "description": "Open-source trading terminal: advanced charting, drawing tools and a built-in paper-trading engine, with no backend required.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dylanpersonguy/OpenCharts.git"
+  },
+  "homepage": "https://github.com/dylanpersonguy/OpenCharts#readme",
+  "bugs": {
+    "url": "https://github.com/dylanpersonguy/OpenCharts/issues"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

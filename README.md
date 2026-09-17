@@ -4,7 +4,13 @@
 
 **An open-source trading terminal that runs entirely in your browser — no backend to run, no signup, no API keys.**
 
-Advanced charting · full drawing-tool suite · 8 indicators · watchlist · depth-of-market · order ticket · built-in paper-trading engine, seeded with **real** market history.
+Advanced charting · full drawing-tool suite · 8 indicators · session replay · watchlist · depth-of-market · order ticket · built-in paper-trading engine, seeded with **real** market history.
+
+[![CI](https://github.com/dylanpersonguy/OpenCharts/actions/workflows/ci.yml/badge.svg)](https://github.com/dylanpersonguy/OpenCharts/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A520-brightgreen.svg)](https://nodejs.org)
+
+**[▶ Live demo](https://dylanpersonguy.github.io/OpenCharts/)** · [Changelog](CHANGELOG.md) · [Contributing](CONTRIBUTING.md)
 
 ![OpenCharts trading terminal](docs/screenshot.png)
 
@@ -378,7 +384,13 @@ npm run typecheck   # tsc --noEmit, strict, zero errors
 npm run lint        # ESLint 9 flat config, zero errors *and* zero warnings
 npm run test        # Vitest — 166 tests
 npm run build       # production bundle
+npm run check:size  # first-load payload budget
 ```
+
+GitHub Actions runs all five on every pull request (`.github/workflows/ci.yml`),
+with lint under `--max-warnings=0`. The size gate exists because the first-load
+payload was 4.94 MB before the candle data was made lazy — see
+[`scripts/check-bundle-size.mjs`](scripts/check-bundle-size.mjs).
 
 The paper engine is the part worth breaking carefully — its order lifecycle,
 margin maths and rounding are covered in
@@ -484,6 +496,7 @@ network requests. Drop those components if you want a strictly offline build.
 | `npm run dev` | Start the Vite dev server |
 | `npm run dev:ci` | Dev server bound to `0.0.0.0:5173` |
 | `npm run build` | Production build to `dist/` |
+| `npm run check:size` | Fail if the first-load payload exceeds its budget (run after `build`) |
 | `npm run preview` | Preview the production build |
 | `npm run typecheck` | Type-check the project with `tsc` |
 | `npm run test` | Run the Vitest unit tests |
@@ -558,9 +571,13 @@ Good places to start:
   [Known limitations](#known-limitations).
 - **Tests, docs and bug reports** — coverage is thin and every report helps.
 
-Before opening a PR, run `npm run typecheck` and `npm run test`, and keep changes
-to the demo layer behind the `api` / `wsClient` interfaces so the terminal stays
-backend-agnostic.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) covers setup, the four CI gates, the layout
+of the codebase and what makes a reviewable PR. Please also read the
+[Code of Conduct](CODE_OF_CONDUCT.md), and report security issues privately via
+[`SECURITY.md`](SECURITY.md) rather than in a public issue.
+
+The one architectural rule: keep changes behind the `api` / `wsClient`
+interfaces so the terminal stays backend-agnostic.
 
 ## Acknowledgements
 
@@ -575,6 +592,7 @@ OpenCharts is released under the **MIT License** — see [LICENSE](LICENSE).
 
 It bundles TradingView's Lightweight Charts™, which is licensed under the
 **Apache License 2.0** and requires that you keep its attribution notice and a
-link to <https://www.tradingview.com/> visible to your users. See
+link to <https://www.tradingview.com/> visible to your users. That notice lives
+in [NOTICE](NOTICE) — keep it with any copy you redistribute. See
 [Built on Lightweight Charts](#built-on-lightweight-charts) for what that means
 in practice before you deploy or redistribute a fork.

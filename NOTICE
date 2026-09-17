@@ -1,0 +1,41 @@
+OpenCharts
+Copyright (c) OpenCharts Contributors
+
+This product is licensed under the MIT License (see LICENSE).
+
+────────────────────────────────────────────────────────────────────────────
+This product includes software developed by TradingView, Inc.
+────────────────────────────────────────────────────────────────────────────
+
+TradingView Lightweight Charts™
+Copyright (с) 2025 TradingView, Inc. https://www.tradingview.com/
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not
+use this software except in compliance with the License. You may obtain a
+copy of the License at:
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+The Lightweight Charts™ library renders every chart in OpenCharts, and several
+plugins under src/lib/chart-plugins/ (plugin-base.ts, tooltip/, delta-tooltip/,
+session-highlighting/, session-breaks/, bands-indicator/,
+highlight-bar-crosshair/, helpers/) are adapted from the plugin examples in
+that project.
+
+ATTRIBUTION REQUIREMENT
+----------------------
+TradingView's license terms require that the attribution notice above, and a
+link to https://www.tradingview.com/, appear on the page of your website or
+application that is available to your users.
+
+OpenCharts satisfies this through the chart's built-in attribution logo: the
+`attributionLogo` layout option defaults to `true` and this project never
+overrides it, so the TradingView link renders on the chart pane. If you set
+`attributionLogo: false` in a fork or deployment, you must place the notice and
+link somewhere your users can see them.
+
+If you redistribute OpenCharts, keep this NOTICE file with it.
+
+────────────────────────────────────────────────────────────────────────────
+fancy-canvas — Copyright (c) TradingView, Inc. — MIT License
+(a transitive dependency of lightweight-charts)

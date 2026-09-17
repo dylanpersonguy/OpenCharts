@@ -1,0 +1,71 @@
+name: Bug report
+description: Something in the terminal behaves incorrectly
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. If this is a security issue, please use a
+        [security advisory](https://github.com/dylanpersonguy/OpenCharts/security/advisories/new)
+        instead of a public issue.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what did you get instead?
+      placeholder: |
+        I placed a limit order below the market and expected it to rest as
+        pending. It filled immediately at ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the terminal on BTCUSD, 15m
+        2. Switch the ticket to LIMIT
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Anything in the browser console. Paste it as-is.
+      render: shell
+
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and OS
+      placeholder: Chrome 140 on Windows 11
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The release tag you are on, or the commit SHA.
+      placeholder: v0.2.0
+
+  - type: dropdown
+    id: setup
+    attributes:
+      label: How are you running it?
+      options:
+        - The bundled demo (no backend)
+        - A fork wired to my own data/trading backend
+        - The hosted demo
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Screenshots, a recording, or context that might matter.

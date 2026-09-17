@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Question or idea
+    url: https://github.com/dylanpersonguy/OpenCharts/discussions
+    about: Ask how something works, or float an idea before building it.
+  - name: Security vulnerability
+    url: https://github.com/dylanpersonguy/OpenCharts/security/advisories/new
+    about: Report privately instead of opening a public issue.
