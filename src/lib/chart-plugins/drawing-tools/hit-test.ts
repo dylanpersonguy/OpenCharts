@@ -100,14 +100,15 @@ function pointHit(e: ResolvedEntry, timeKey: TimeKey | null, priceKey: PriceKey 
   return { id: e.d.id, region: { kind: "point", timeKey, priceKey } };
 }
 
-// Position handles: entry / target / stop sit at the box mid-x; the right edge
-// resizes the box width. Body = anywhere inside the entry↔stop↔target span.
+// Position handles: entry / target / stop / side width / corners
 function hitPosition(e: ResolvedEntry, p: Pt, tol: Tol): Hit | null {
   const { x1, x2, y1, yStop, yTarget } = e;
   if (x1 === null || x2 === null || y1 === null) return null;
   const xa = Math.min(x1, x2);
   const xb = Math.max(x1, x2);
   const xm = (xa + xb) / 2;
+
+  // Center handles
   if (yTarget != null && dist(p, { x: xm, y: yTarget }) <= tol.handle) {
     return pointHit(e, null, "targetPrice");
   }
@@ -115,7 +116,33 @@ function hitPosition(e: ResolvedEntry, p: Pt, tol: Tol): Hit | null {
     return pointHit(e, null, "stopPrice");
   }
   if (dist(p, { x: xm, y: y1 }) <= tol.handle) return pointHit(e, null, "price");
+
+  // Side handles (on entry line)
+  if (dist(p, { x: xa, y: y1 }) <= tol.handle) return pointHit(e, "time", null);
   if (dist(p, { x: xb, y: y1 }) <= tol.handle) return pointHit(e, "time2", null);
+
+  // Corner handles
+  if (yTarget != null && dist(p, { x: xa, y: yTarget }) <= tol.handle) {
+    return pointHit(e, "time", "targetPrice");
+  }
+  if (yTarget != null && dist(p, { x: xb, y: yTarget }) <= tol.handle) {
+    return pointHit(e, "time2", "targetPrice");
+  }
+  if (yStop != null && dist(p, { x: xa, y: yStop }) <= tol.handle) {
+    return pointHit(e, "time", "stopPrice");
+  }
+  if (yStop != null && dist(p, { x: xb, y: yStop }) <= tol.handle) {
+    return pointHit(e, "time2", "stopPrice");
+  }
+
+  // Edge line hit-tests
+  if (yTarget != null && Math.abs(p.y - yTarget) <= tol.line && p.x >= xa && p.x <= xb) {
+    return pointHit(e, null, "targetPrice");
+  }
+  if (yStop != null && Math.abs(p.y - yStop) <= tol.line && p.x >= xa && p.x <= xb) {
+    return pointHit(e, null, "stopPrice");
+  }
+
   const ys = [y1, yStop ?? y1, yTarget ?? y1];
   const top = Math.min(...ys);
   const bot = Math.max(...ys);
