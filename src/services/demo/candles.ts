@@ -1,12 +1,9 @@
 import type { Candle } from "../schemas.ts";
+import { fetchBinanceKlines, symbolToBinancePair } from "./binance.ts";
 
 /**
  * Loads the bundled REAL OHLC history and serves it to the chart / feed.
- *
- * History is time-shifted at runtime so the most recent bar aligns to the
- * current period, making the demo feel "live" while every OHLC value remains
- * genuine market data (never synthetic). The demo feed (feed.ts) then streams
- * replayed real ticks forward from "now".
+ * Dynamically fetches missing symbols from Binance on demand.
  */
 
 // Eagerly bundle every data/<SYMBOL>_<tf>.json file.
@@ -56,10 +53,60 @@ export function getHistory(symbol: string, timeframe: string, limit?: number): C
   return limit && limit < shifted.length ? shifted.slice(-limit) : shifted;
 }
 
+/** Dynamic on-demand candle fetcher for any cryptocurrency */
+export async function ensureCandlesLoaded(
+  symbol: string,
+  timeframe: string,
+  limit = 1000,
+): Promise<Candle[]> {
+  const existing = rawSeries(symbol, timeframe);
+  if (existing.length > 0) {
+    return getHistory(symbol, timeframe, limit);
+  }
+
+  const pair = symbolToBinancePair(symbol);
+  try {
+    const safeLimit = Math.min(Math.max(limit, 10), 1000);
+    const fetched = await fetchBinanceKlines(pair, timeframe, safeLimit);
+    if (fetched.length > 0) {
+      series.set(`${symbol}_${timeframe}`, fetched);
+
+      // Also ensure 1m tick series is available for tick simulator
+      if (!series.has(`${symbol}_1m`)) {
+        if (timeframe === "1m") {
+          series.set(`${symbol}_1m`, fetched);
+        } else {
+          // Fetch 1m asynchronously in background without blocking chart load
+          fetchBinanceKlines(pair, "1m", 1000)
+            .then((m1) => {
+              if (m1.length > 0) series.set(`${symbol}_1m`, m1);
+            })
+            .catch(() => {
+              series.set(`${symbol}_1m`, fetched);
+            });
+        }
+      }
+
+      return getHistory(symbol, timeframe, limit);
+    }
+  } catch (err) {
+    console.warn(`Failed to fetch on-demand candles for ${symbol} (${timeframe}):`, err);
+  }
+  return [];
+}
+
 /** Fine-grained close series (1m) used by the feed to replay real ticks. */
 export function getTickPrices(symbol: string): number[] {
   const bars = rawSeries(symbol, "1m");
-  return bars.map((c) => c.close);
+  if (bars.length > 0) {
+    return bars.map((c) => c.close);
+  }
+  for (const [key, b] of series.entries()) {
+    if (key.startsWith(`${symbol}_`) && b.length > 0) {
+      return b.map((c) => c.close);
+    }
+  }
+  return [];
 }
 
 /** Latest real close — seed price before the feed starts streaming. */

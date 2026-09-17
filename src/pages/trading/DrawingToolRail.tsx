@@ -163,7 +163,10 @@ export function DrawingToolRail({
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [hidden, setHidden] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-  const drag = useDragOffset();
+  const drag = useDragOffset({
+    storageKey: "opencharts:drawing-rail-offset",
+    defaultCenterY: true,
+  });
 
   useEffect(() => {
     if (!openGroup) return;
@@ -192,7 +195,7 @@ export function DrawingToolRail({
         title="Show drawing tools"
         onClick={() => setHidden(false)}
         style={drag.style}
-        className="absolute left-1 top-1 z-20 rounded-md border border-border bg-card/90 p-1.5 text-muted-foreground backdrop-blur-sm hover:text-primary"
+        className="absolute left-1.5 top-1/2 z-20 rounded-md border border-border bg-card/90 p-1.5 text-muted-foreground shadow-md backdrop-blur-sm hover:text-primary"
       >
         <PenTool className="h-4 w-4" />
       </button>
@@ -203,11 +206,12 @@ export function DrawingToolRail({
     <div
       ref={ref}
       style={drag.style}
-      className="absolute left-1 top-1 z-20 flex flex-col items-center gap-0.5 rounded-md bg-card/90 border border-border p-0.5 backdrop-blur-sm"
+      className="absolute left-1.5 top-1/2 z-20 flex flex-col items-center gap-0.5 rounded-md bg-card/90 border border-border p-0.5 shadow-md backdrop-blur-sm"
     >
       <div
         onPointerDown={drag.onPointerDown}
-        title="Drag to move"
+        onDoubleClick={drag.reset}
+        title="Drag to move (Double-click to reset to center)"
         className="flex w-full cursor-move justify-center py-0.5 text-muted-foreground/50 hover:text-muted-foreground"
       >
         <GripVertical className="h-3.5 w-3.5" />

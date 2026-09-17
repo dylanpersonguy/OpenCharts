@@ -271,10 +271,16 @@ export function useCandles(
     select: (data) => data.candles,
     staleTime: 30_000,
     // Keep previously-fetched candles visible while a new depth query (different
-    // limit in the key) is in-flight. Without this, switching from firstPaint
-    // → deep limit causes a momentary empty array, which lets a live WS candle
-    // paint as the only bar before history arrives.
-    placeholderData: (prev) => prev,
+    // limit in the key) is in-flight for the EXACT same symbol & timeframe.
+    // When switching symbols, placeholderData should be undefined so old symbol
+    // data does not persist.
+    placeholderData: (prev, prevQuery) => {
+      const prevKey = prevQuery?.queryKey;
+      if (prevKey && prevKey[1] === symbol && prevKey[2] === timeframe) {
+        return prev;
+      }
+      return undefined;
+    },
     // When the server signals the response is partial (backfill queued), poll
     // at 3 s until data fills in. Otherwise use the 5-min safety-net cadence.
     refetchInterval: (query) => (query.state.data?.metadata?.isPartial ? 3_000 : 5 * 60_000),

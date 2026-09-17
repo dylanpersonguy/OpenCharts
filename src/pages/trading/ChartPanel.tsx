@@ -1647,6 +1647,8 @@ export function ChartPanel({
       chartPluginsRef.current = [];
       // Clear per-chart state so it doesn't bleed into the recreated chart
       // (theme toggle also destroys/recreates the chart instance).
+      lastLoadKeyRef.current = "";
+      lastLoadedSeriesRef.current = null;
       lastCandleRef.current = null;
       legendVolRef.current = 0;
       liveCandleTsRef.current = 0;
@@ -1746,6 +1748,7 @@ export function ChartPanel({
   // ── Refs for smooth real-time streaming ────────────────
   const lastCandleRef = useRef<CandlestickData<Time> | null>(null);
   const lastLoadKeyRef = useRef<string>("");
+  const lastLoadedSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const latestLiveCandleRef = useRef<typeof liveCandle | undefined>(undefined);
   // Authoritative server candle timestamp, normalised to unix MILLISECONDS —
   // used to ignore ticks that pre-date the latest server CandleUpdate (those can
@@ -1792,7 +1795,7 @@ export function ChartPanel({
     if (!series || chartData.length === 0) return;
     const ctx = makeRtCtx(series);
     const loadKey = `${selectedSymbol}:${timeframe}`;
-    const isNewChart = lastLoadKeyRef.current !== loadKey;
+    const isNewChart = lastLoadKeyRef.current !== loadKey || lastLoadedSeriesRef.current !== series;
 
     series.setData(chartData);
     volumeSeriesRef.current?.setData(volumeData);
@@ -1808,6 +1811,7 @@ export function ChartPanel({
 
     scrollOrFit(chartRef.current, chartData.length);
     lastLoadKeyRef.current = loadKey;
+    lastLoadedSeriesRef.current = series;
     liveCandleTsRef.current = 0;
     replayBufferedLive(buffered, chartData, ctx);
     return scheduleStaleRefetch(chartData, ctx);
