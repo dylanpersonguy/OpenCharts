@@ -353,26 +353,22 @@ function renderLivePositionTracker(
   const inProfit = isLong ? e.currentPrice >= e.d.price : e.currentPrice <= e.d.price;
   const trackColor = inProfit ? POS_GREEN : POS_RED;
 
+  // Strictly clamp tracker within the position tool's time span [xa, xb]
   const xEntry = xa;
-  const xTrack = Math.max(xEntry, e.xCurrent);
+  const xTrack = Math.min(xb, Math.max(xEntry, e.xCurrent));
   const yEntry = y1;
   const yCurr = e.yCurrent;
 
-  // 1. Highlight area between entry and current price
+  // 1. Highlight area between entry and exit/current candle
   posZone(scope, xEntry, xTrack, yEntry, yCurr, trackColor, 0.28);
 
-  // 2. Dotted horizontal reference line extending from entry across the candles
-  const xSpanEnd = Math.max(xb, xTrack);
-  strokeLine(scope, toBitmap(scope, xEntry, yEntry), toBitmap(scope, xSpanEnd, yEntry), "#d1d4dc", 1.2, [4, 4]);
-
-  // 3. Dotted vertical crosshair / guide line aligned with current candle/price
+  // 2. Dotted vertical crosshair / guide line at the active/exit candle
   strokeLine(scope, toBitmap(scope, xTrack, yEntry), toBitmap(scope, xTrack, yCurr), trackColor, 1.5, [3, 3]);
 
-  // 4. Glowing marker dot at current price
+  // 3. Marker dot at exit/current price
   const currPt = toBitmap(scope, xTrack, yCurr);
   const ctx = scope.context;
   const hpr = scope.horizontalPixelRatio;
-  const vpr = scope.verticalPixelRatio;
 
   ctx.save();
   ctx.beginPath();
@@ -389,13 +385,14 @@ function renderLivePositionTracker(
   ctx.stroke();
   ctx.restore();
 
-  // 5. Live Tracking P&L readout badge
+  // 4. Tracking P&L readout badge (Live or Closed)
   const diff = Math.abs(e.currentPrice - e.d.price);
   const pct = e.d.price !== 0 ? ((e.currentPrice - e.d.price) / e.d.price) * (isLong ? 100 : -100) : 0;
   const sign = pct >= 0 ? "+" : "";
+  const statusLabel = e.trackingStatus === "CLOSED" ? "Closed" : "Live";
 
   const trackerLines = [
-    `Live ${info.priceFormat(e.currentPrice)} (${sign}${pct.toFixed(2)}%)`,
+    `${statusLabel} ${info.priceFormat(e.currentPrice)} (${sign}${pct.toFixed(2)}%)`,
   ];
 
   if (e.d.riskPct && info.accountEquity > 0 && e.d.stopPrice != null) {
@@ -407,7 +404,7 @@ function renderLivePositionTracker(
     trackerLines.push(`P&L: ${pnlSign}$${pnlUsd.toFixed(2)}`);
   }
 
-  drawLiveTrackerBadge(scope, xTrack + 10, yCurr, trackerLines, trackColor);
+  drawLiveTrackerBadge(scope, xTrack, yCurr, trackerLines, trackColor);
 }
 
 function drawLiveTrackerBadge(
@@ -431,11 +428,12 @@ function drawLiveTrackerBadge(
   const boxW = maxTextW + padX * 2;
   const boxH = lines.length * lineH + padY * 2;
 
-  let bx = Math.round(x * hpr);
+  let bx = Math.round(x * hpr + 8 * hpr);
   let by = Math.round(y * vpr - boxH / 2);
 
+  // If badge would overflow right of viewport, place on left of marker
   if (bx + boxW > scope.bitmapSize.width - 4 * hpr) {
-    bx = Math.round(x * hpr - boxW - 20 * hpr);
+    bx = Math.round(x * hpr - boxW - 8 * hpr);
   }
   by = Math.min(Math.max(4 * vpr, by), scope.bitmapSize.height - boxH - 4 * vpr);
 

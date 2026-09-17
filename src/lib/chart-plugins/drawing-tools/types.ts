@@ -39,6 +39,7 @@ export interface ResolvedEntry {
   xCurrent?: number | null;
   yCurrent?: number | null;
   currentPrice?: number | null;
+  trackingStatus?: "ACTIVE" | "CLOSED";
   /** Third anchor (parallel channel offset line). */
   x3?: number | null;
   y3?: number | null;
