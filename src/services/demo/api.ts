@@ -1,7 +1,8 @@
 import type { DrawingLine } from "../../pages/trading/constants.ts";
 import type { Candle } from "../schemas.ts";
-import { getHistory } from "./candles.ts";
+import { getHistory, ensureCandlesLoaded } from "./candles.ts";
 import * as engine from "./engine.ts";
+import { registerFeedSymbol } from "./feed.ts";
 import { DEMO_SYMBOLS } from "./instruments.ts";
 
 /**
@@ -129,10 +130,16 @@ export const demoApi = {
 
   // ── Symbols & market data ──
   getSymbols: () => Promise.resolve(DEMO_SYMBOLS),
-  getCandles: (symbol: string, timeframe: string, limit?: number) =>
-    Promise.resolve(getHistory(symbol, timeframe, limit)),
-  getCandlesWithMeta: (symbol: string, timeframe: string, limit?: number) =>
-    Promise.resolve(candlesMeta(getHistory(symbol, timeframe, limit))),
+  getCandles: async (symbol: string, timeframe: string, limit?: number) => {
+    const candles = await ensureCandlesLoaded(symbol, timeframe, limit);
+    registerFeedSymbol(symbol);
+    return candles;
+  },
+  getCandlesWithMeta: async (symbol: string, timeframe: string, limit?: number) => {
+    const candles = await ensureCandlesLoaded(symbol, timeframe, limit);
+    registerFeedSymbol(symbol);
+    return candlesMeta(candles);
+  },
   getTick: (symbol: string) => {
     const price = engine.getLastPrice(symbol);
     return Promise.resolve({ symbol, bid: price, ask: price, timestamp: Date.now() });

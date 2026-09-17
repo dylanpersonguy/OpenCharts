@@ -40,6 +40,34 @@ function emitTick(cursor: SymbolCursor): void {
   mark(cursor.symbol, price);
 }
 
+export function registerFeedSymbol(symbolName: string): void {
+  const prices = getTickPrices(symbolName);
+  const existing = cursors.find((c) => c.symbol === symbolName);
+  if (existing) {
+    if (prices.length > 0) {
+      existing.prices = prices;
+      const seed = prices[prices.length - 1] ?? 0;
+      const s = DEMO_SYMBOLS.find((item) => item.name === symbolName);
+      existing.spread = Math.max(s?.tickSize ?? 0.01, seed * 0.0001);
+      if (existing.index >= prices.length) existing.index = 0;
+      emitTick(existing);
+    }
+    return;
+  }
+  const s = DEMO_SYMBOLS.find((item) => item.name === symbolName);
+  const seed = prices[prices.length - 1] ?? 0;
+  const cursor: SymbolCursor = {
+    symbol: symbolName,
+    prices,
+    index: 0,
+    spread: Math.max(s?.tickSize ?? 0.01, seed * 0.0001),
+  };
+  cursors.push(cursor);
+  if (prices.length > 0) {
+    emitTick(cursor);
+  }
+}
+
 export function startDemoFeed(): void {
   if (timer) return;
   cursors = buildCursors();

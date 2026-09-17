@@ -65,6 +65,7 @@ export interface ChartToolbarProps {
     isActive?: boolean;
   }>;
   onSymbolChange: (s: string) => void;
+  onOpenSymbolSearch?: () => void;
   timeframe: Timeframe;
   onTimeframeChange: (tf: Timeframe) => void;
   activeIndicators: IndicatorType[];
@@ -111,6 +112,7 @@ export function ChartToolbar({
   selectedSymbol,
   symbols,
   onSymbolChange,
+  onOpenSymbolSearch,
   timeframe,
   onTimeframeChange,
   activeIndicators,
@@ -160,7 +162,13 @@ export function ChartToolbar({
       {/* Symbol Selector — TradingView style */}
       <div className="relative shrink-0">
         <button
-          onClick={() => setShowSymbolSearch((v) => !v)}
+          onClick={() => {
+            if (onOpenSymbolSearch) {
+              onOpenSymbolSearch();
+            } else {
+              setShowSymbolSearch((v) => !v);
+            }
+          }}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-secondary font-bold text-sm tracking-tight"
         >
           {selectedSymbol}

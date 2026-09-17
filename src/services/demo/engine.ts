@@ -1,6 +1,7 @@
 import type { Account, ClosedPosition, Fill, Order, Position } from "../schemas.ts";
 import { publish } from "./bus.ts";
 import { getDemoSymbol } from "./instruments.ts";
+import { getSeedPrice } from "./candles.ts";
 
 /**
  * In-browser paper-trading engine. The single source of truth for the demo
@@ -55,7 +56,9 @@ export function getFills(): Fill[] {
   return fills.map((f) => ({ ...f }));
 }
 export function getLastPrice(symbol: string): number {
-  return lastPrice.get(symbol) ?? 0;
+  const p = lastPrice.get(symbol);
+  if (p && p > 0) return p;
+  return getSeedPrice(symbol);
 }
 
 function notional(symbol: string, qty: number, price: number): number {

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo } from "react";
-import { Star } from "lucide-react";
+import { Star, Plus } from "lucide-react";
 import { usePlaceOrder } from "../../services/queries.ts";
 import { formatNumber, cn } from "../../lib/utils.ts";
 import { toast } from "../../services/toast.ts";
@@ -9,6 +9,7 @@ export function WatchlistPanel({
   ticks,
   selectedSymbol,
   onSelect,
+  onOpenSymbolSearch,
   oneClick,
   accountId,
   isFeedConnected = true,
@@ -24,6 +25,7 @@ export function WatchlistPanel({
   ticks: Record<string, { bid: number; ask: number; timestamp: number }>;
   selectedSymbol: string;
   onSelect: (s: string) => void;
+  onOpenSymbolSearch?: () => void;
   oneClick?: boolean;
   accountId?: string | null;
   isFeedConnected?: boolean;
@@ -76,14 +78,26 @@ export function WatchlistPanel({
   return (
     <div className="flex flex-col h-full">
       <div className="px-3 py-2 border-b border-border bg-secondary">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
-          Watchlist
-        </h3>
+        <div className="flex items-center justify-between mb-1.5">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            Watchlist
+          </h3>
+          {onOpenSymbolSearch && (
+            <button
+              onClick={onOpenSymbolSearch}
+              className="flex items-center gap-1 text-[11px] text-primary hover:text-primary/80 font-medium px-1.5 py-0.5 rounded hover:bg-background/50 transition-colors"
+              title="Add Symbol (or just start typing on the chart)"
+            >
+              <Plus className="h-3 w-3" />
+              Add Symbol
+            </button>
+          )}
+        </div>
         <input
-          placeholder="Search..."
+          placeholder="Filter watchlist..."
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          className="w-full text-xs"
+          className="w-full text-xs px-2 py-1 rounded bg-background border border-border outline-none focus:border-primary"
         />
       </div>
       <div className="flex gap-1 px-2 py-1 border-b border-border overflow-x-auto text-[10px]">
@@ -152,27 +166,29 @@ export function WatchlistPanel({
           return (
             <div
               key={s.id || s.name}
+              onClick={() => onSelect(s.name)}
               className={cn(
-                "w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-secondary border-b border-border/30 group",
+                "w-full flex items-center justify-between px-3 py-1.5 text-xs hover:bg-secondary border-b border-border/30 group cursor-pointer select-none",
                 s.name === selectedSymbol && "bg-secondary",
               )}
             >
               <button
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   toggleFavorite(s.name);
                 }}
                 className={cn(
-                  "shrink-0 mr-1",
+                  "shrink-0 mr-1 p-0.5",
                   isFav ? "text-yellow-400" : "text-muted-foreground/20 hover:text-yellow-400/60",
                 )}
               >
                 <Star className="h-3 w-3" fill={isFav ? "currentColor" : "none"} />
               </button>
-              <button onClick={() => onSelect(s.name)} className="text-left flex-1 min-w-0">
+              <div className="text-left flex-1 min-w-0">
                 <div className="font-semibold">{s.name}</div>
                 <div className="text-[10px] text-muted-foreground">{s.category}</div>
-              </button>
+              </div>
               {t ? (
                 <div className="flex items-center gap-1">
                   <div className="text-right font-mono">
@@ -182,13 +198,21 @@ export function WatchlistPanel({
                   {oneClick && (
                     <div className="hidden group-hover:flex flex-col gap-0.5 ml-1">
                       <button
-                        onClick={() => handleQuickTrade("BUY")}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickTrade("BUY");
+                        }}
                         className="px-1 py-0.5 text-[8px] rounded bg-buy/20 text-buy hover:bg-buy/30 font-semibold"
                       >
                         B
                       </button>
                       <button
-                        onClick={() => handleQuickTrade("SELL")}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleQuickTrade("SELL");
+                        }}
                         className="px-1 py-0.5 text-[8px] rounded bg-sell/20 text-sell hover:bg-sell/30 font-semibold"
                       >
                         S

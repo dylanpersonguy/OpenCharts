@@ -24,7 +24,7 @@ function crypto(name: string, displayName: string, tickSize: number): Symbol {
   };
 }
 
-export const DEMO_SYMBOLS: Symbol[] = [
+const DEFAULT_SYMBOLS: Symbol[] = [
   crypto("BTCUSD", "Bitcoin", 0.01),
   crypto("ETHUSD", "Ethereum", 0.01),
   crypto("SOLUSD", "Solana", 0.01),
@@ -33,8 +33,42 @@ export const DEMO_SYMBOLS: Symbol[] = [
   crypto("ADAUSD", "Cardano", 0.0001),
 ];
 
+const CUSTOM_SYMBOLS_KEY = "oc_custom_symbols";
+
+function loadCustomSymbols(): Symbol[] {
+  try {
+    const raw = localStorage.getItem(CUSTOM_SYMBOLS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCustomSymbols(list: Symbol[]): void {
+  try {
+    const customOnly = list.filter((s) => !DEFAULT_SYMBOLS.some((d) => d.name === s.name));
+    localStorage.setItem(CUSTOM_SYMBOLS_KEY, JSON.stringify(customOnly));
+  } catch {
+    /* ignore */
+  }
+}
+
+export const DEMO_SYMBOLS: Symbol[] = [...DEFAULT_SYMBOLS, ...loadCustomSymbols()];
+
 export const DEMO_SYMBOL_NAMES = DEMO_SYMBOLS.map((s) => s.name);
 
 export function getDemoSymbol(name: string): Symbol | undefined {
   return DEMO_SYMBOLS.find((s) => s.name === name);
+}
+
+export function addDynamicSymbol(symbol: Symbol): Symbol {
+  const existing = DEMO_SYMBOLS.find((s) => s.name === symbol.name);
+  if (existing) return existing;
+
+  DEMO_SYMBOLS.push(symbol);
+  if (!DEMO_SYMBOL_NAMES.includes(symbol.name)) {
+    DEMO_SYMBOL_NAMES.push(symbol.name);
+  }
+  saveCustomSymbols(DEMO_SYMBOLS);
+  return symbol;
 }
