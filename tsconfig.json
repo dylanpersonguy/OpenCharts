@@ -23,5 +23,5 @@
       "@propsim/types": ["./src/vendor/types.ts"]
     }
   },
-  "include": ["src", "vite-env.d.ts"]
+  "include": ["src", "examples", "vite-env.d.ts"]
 }

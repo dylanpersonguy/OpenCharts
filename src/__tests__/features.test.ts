@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { demoApi } from "@/services/demo/api";
+import { api } from "@/services/api";
 import { subscribeChannel, __resetBus } from "@/services/demo/bus";
-import * as replay from "@/services/demo/replay";
+import * as replay from "@/services/replay";
 import * as engine from "@/services/demo/engine";
 import { safeStorage } from "@/lib/safe-storage";
 import { toLocalDateString } from "@/lib/utils";
@@ -21,11 +21,11 @@ afterEach(() => {
 
 describe("trade journal persistence", () => {
   it("starts empty", async () => {
-    await expect(demoApi.getJournalEntries(ACCOUNT)).resolves.toEqual({ entries: [], total: 0 });
+    await expect(api.getJournalEntries(ACCOUNT)).resolves.toEqual({ entries: [], total: 0 });
   });
 
   it("round-trips an entry", async () => {
-    const created = await demoApi.createJournalEntry({
+    const created = await api.createJournalEntry({
       accountId: ACCOUNT,
       symbolName: "BTCUSD",
       notes: "Took the breakout",
@@ -34,7 +34,7 @@ describe("trade journal persistence", () => {
     });
     expect(created.id).toBeTruthy();
 
-    const { entries, total } = await demoApi.getJournalEntries(ACCOUNT);
+    const { entries, total } = await api.getJournalEntries(ACCOUNT);
     expect(total).toBe(1);
     expect(entries[0]).toMatchObject({
       symbolName: "BTCUSD",
@@ -45,50 +45,50 @@ describe("trade journal persistence", () => {
   });
 
   it("survives a reload — entries live in storage, not memory", async () => {
-    await demoApi.createJournalEntry({ accountId: ACCOUNT, notes: "persisted" });
+    await api.createJournalEntry({ accountId: ACCOUNT, notes: "persisted" });
     const raw = safeStorage.getItem("oc_journal_entries");
     expect(raw).toContain("persisted");
   });
 
   it("keeps entries newest-first", async () => {
-    await demoApi.createJournalEntry({ accountId: ACCOUNT, notes: "first" });
-    await demoApi.createJournalEntry({ accountId: ACCOUNT, notes: "second" });
-    const { entries } = await demoApi.getJournalEntries(ACCOUNT);
+    await api.createJournalEntry({ accountId: ACCOUNT, notes: "first" });
+    await api.createJournalEntry({ accountId: ACCOUNT, notes: "second" });
+    const { entries } = await api.getJournalEntries(ACCOUNT);
     expect(entries[0]?.notes).toBe("second");
   });
 
   it("updates an entry in place", async () => {
-    const created = await demoApi.createJournalEntry({ accountId: ACCOUNT, notes: "before" });
-    const updated = await demoApi.updateJournalEntry(created.id, { notes: "after", rating: 5 });
+    const created = await api.createJournalEntry({ accountId: ACCOUNT, notes: "before" });
+    const updated = await api.updateJournalEntry(created.id, { notes: "after", rating: 5 });
     expect(updated).toMatchObject({ notes: "after", rating: 5 });
 
-    const { entries } = await demoApi.getJournalEntries(ACCOUNT);
+    const { entries } = await api.getJournalEntries(ACCOUNT);
     expect(entries).toHaveLength(1);
     expect(entries[0]?.notes).toBe("after");
   });
 
   it("returns null when updating an unknown entry", async () => {
-    await expect(demoApi.updateJournalEntry("nope", { notes: "x" })).resolves.toBeNull();
+    await expect(api.updateJournalEntry("nope", { notes: "x" })).resolves.toBeNull();
   });
 
   it("deletes an entry", async () => {
-    const created = await demoApi.createJournalEntry({ accountId: ACCOUNT, notes: "bye" });
-    await demoApi.deleteJournalEntry(created.id);
-    await expect(demoApi.getJournalEntries(ACCOUNT)).resolves.toEqual({ entries: [], total: 0 });
+    const created = await api.createJournalEntry({ accountId: ACCOUNT, notes: "bye" });
+    await api.deleteJournalEntry(created.id);
+    await expect(api.getJournalEntries(ACCOUNT)).resolves.toEqual({ entries: [], total: 0 });
   });
 
   it("scopes entries to their account", async () => {
-    await demoApi.createJournalEntry({ accountId: ACCOUNT, notes: "mine" });
-    await demoApi.createJournalEntry({ accountId: "other", notes: "theirs" });
-    const { entries, total } = await demoApi.getJournalEntries(ACCOUNT);
+    await api.createJournalEntry({ accountId: ACCOUNT, notes: "mine" });
+    await api.createJournalEntry({ accountId: "other", notes: "theirs" });
+    const { entries, total } = await api.getJournalEntries(ACCOUNT);
     expect(total).toBe(1);
     expect(entries[0]?.notes).toBe("mine");
   });
 
   it("filters by symbol", async () => {
-    await demoApi.createJournalEntry({ accountId: ACCOUNT, symbolName: "BTCUSD", notes: "btc" });
-    await demoApi.createJournalEntry({ accountId: ACCOUNT, symbolName: "ETHUSD", notes: "eth" });
-    const { entries } = await demoApi.getJournalEntries(ACCOUNT, { symbol: "ETHUSD" });
+    await api.createJournalEntry({ accountId: ACCOUNT, symbolName: "BTCUSD", notes: "btc" });
+    await api.createJournalEntry({ accountId: ACCOUNT, symbolName: "ETHUSD", notes: "eth" });
+    const { entries } = await api.getJournalEntries(ACCOUNT, { symbol: "ETHUSD" });
     expect(entries).toHaveLength(1);
     expect(entries[0]?.notes).toBe("eth");
   });
@@ -112,7 +112,7 @@ describe("session replay", () => {
       expect(bar.t).toBeGreaterThanOrEqual(start);
       expect(bar.t).toBeLessThan(end);
     }
-    const times = session.tickBuffer.map((b) => b.t);
+    const times = session.tickBuffer.map((b: { t: number }) => b.t);
     expect([...times].sort((a, b) => a - b)).toEqual(times);
   });
 
@@ -171,7 +171,8 @@ describe("session replay", () => {
     engine.mark("BTCUSD", 51_000);
     engine.closePosition(engine.getPositions()[0]!.id);
 
-    const session = await replay.getSession(today);
+    const accountId = (await api.getMyAccounts())[0]!.id;
+    const session = await replay.getSession(today, "BTCUSD", accountId);
     expect(session.tradeEvents.length).toBeGreaterThan(0);
     expect(session.tradeEvents[0]).toMatchObject({ type: "exit", symbolName: "BTCUSD" });
   });

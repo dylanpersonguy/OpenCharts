@@ -1,4 +1,6 @@
 import "@testing-library/jest-dom/vitest";
+import { createDemoAdapter } from "@/adapter/demo";
+import { setAdapter } from "@/adapter/registry";
 
 /**
  * jsdom exposes `window.localStorage` as an object with no methods in this
@@ -36,3 +38,7 @@ for (const name of ["localStorage", "sessionStorage"] as const) {
     writable: true,
   });
 }
+
+// The data layer resolves against whichever adapter is installed, so tests get
+// the same bundled demo backend the app ships with.
+setAdapter(createDemoAdapter());

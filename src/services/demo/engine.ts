@@ -1,6 +1,6 @@
 import { uid } from "../../lib/uid.ts";
 import type { Account, ClosedPosition, Fill, Order, Position, Symbol } from "../schemas.ts";
-import { publish } from "./bus.ts";
+import { DEMO_CHANNELS, publish } from "./bus.ts";
 import { getDemoSymbol } from "./instruments.ts";
 
 /**
@@ -220,7 +220,7 @@ function recomputeEquity(): void {
 }
 
 function emitEquity(): void {
-  publish("account", {
+  publish(DEMO_CHANNELS.account, {
     eventType: "EquityUpdated",
     accountId: account.id,
     equity: account.equity,
@@ -263,7 +263,7 @@ function openPosition(
     stopLoss: sl ?? null,
   };
   positions.push(pos);
-  publish("positions", {
+  publish(DEMO_CHANNELS.positions, {
     eventType: "PositionOpened",
     accountId: account.id,
     positionId: pos.id,
@@ -315,7 +315,7 @@ function closeAt(pos: Position, qty: number, exitPrice: number): number {
 
   if (qty >= pos.quantity) {
     if (idx >= 0) positions.splice(idx, 1);
-    publish("positions", {
+    publish(DEMO_CHANNELS.positions, {
       eventType: "PositionClosed",
       accountId: account.id,
       positionId: pos.id,
@@ -326,7 +326,7 @@ function closeAt(pos: Position, qty: number, exitPrice: number): number {
     const remaining = pos.quantity - qty;
     pos.margin = money(pos.margin * (remaining / pos.quantity));
     pos.quantity = remaining;
-    publish("positions", {
+    publish(DEMO_CHANNELS.positions, {
       eventType: "PositionUpdated",
       accountId: account.id,
       positionId: pos.id,
@@ -383,7 +383,7 @@ export function modifyPosition(
 
   if (mods.takeProfit !== undefined) pos.takeProfit = mods.takeProfit;
   if (mods.stopLoss !== undefined) pos.stopLoss = mods.stopLoss;
-  publish("positions", {
+  publish(DEMO_CHANNELS.positions, {
     eventType: "PositionUpdated",
     accountId: account.id,
     positionId,
@@ -419,7 +419,7 @@ export type OrderModifications = {
 const ORDER_TYPES = new Set(["MARKET", "LIMIT", "STOP"]);
 
 function publishOrder(eventType: string, order: Order): void {
-  publish("orders", {
+  publish(DEMO_CHANNELS.orders, {
     eventType,
     accountId: account.id,
     orderId: order.id,
@@ -666,7 +666,7 @@ export function mark(symbol: string, price: number): void {
     pos.currentPrice = price;
     pos.unrealizedPnl = pnlOf(pos, price);
     changed = true;
-    publish("positions", {
+    publish(DEMO_CHANNELS.positions, {
       eventType: "PositionUpdated",
       accountId: account.id,
       positionId: pos.id,

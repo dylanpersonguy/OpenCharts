@@ -8,6 +8,21 @@
  */
 export type ChannelHandler = (event: unknown) => void;
 
+/**
+ * Channels the demo backend publishes on.
+ *
+ * Deliberately distinct from the UI-facing channel names ("market-data",
+ * "positions", ...) that services/ws.ts owns: the demo adapter subscribes to
+ * these and the ws client republishes onto the UI channels, so sharing a name
+ * makes an event loop straight back into itself.
+ */
+export const DEMO_CHANNELS = {
+  ticks: "demo:ticks",
+  positions: "demo:positions",
+  orders: "demo:orders",
+  account: "demo:account",
+} as const;
+
 const channels = new Map<string, Set<ChannelHandler>>();
 
 export function subscribeChannel(channel: string, handler: ChannelHandler): () => void {

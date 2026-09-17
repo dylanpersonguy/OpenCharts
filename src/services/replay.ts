@@ -1,22 +1,40 @@
-import { uid } from "../../lib/uid.ts";
-import { publish } from "./bus.ts";
-import { loadSeries } from "./candles.ts";
-import { getClosedPositions } from "./engine.ts";
-import type { ReplaySessionPayload } from "./api.ts";
+import { getAdapter } from "../adapter/registry.ts";
+import { uid } from "../lib/uid.ts";
+import { publish } from "./demo/bus.ts";
 
 /**
- * Demo session replay.
+ * Session replay.
  *
  * The replay UI drives its own clock (useReplayPlayback runs a rAF loop over
  * the tick buffer); this module supplies the buffer and owns the transport
- * state, broadcasting `ReplayStateChanged` on the same channel the real
- * backend used so MarketDataBridge and the store need no special casing.
+ * state, broadcasting `ReplayStateChanged` so the store and HUD stay in sync.
  *
- * A "session" is the bundled 1-minute history for the charted symbol on the
- * requested date. The bundled series is time-shifted so its last bar is the
- * current period, which means today's date has data and earlier dates may not
- * — the UI already explains an empty session.
+ * The buffer comes from the installed adapter's `getCandles`, so replay works
+ * against any backend rather than needing one of its own. A "session" is the
+ * 1-minute history for the charted symbol on the requested date.
  */
+
+export type ReplaySessionPayload = {
+  replaySession: {
+    id: string;
+    status: string;
+    speed: number;
+    cursorTimestamp: string | null;
+    sessionDate: string;
+  };
+  tickBuffer: Array<{ t: number; o: number; h: number; l: number; c: number; v: number }>;
+  tradeEvents: Array<{
+    id: string;
+    type: "entry" | "exit" | "violation";
+    timestamp: string;
+    symbolName: string | null;
+    side: string | null;
+    price: number | null;
+    pnl: number | null;
+    ruleCode?: string;
+  }>;
+  meta: { primarySymbol: string | null; sessionDate: string; tickCount: number };
+};
 
 type SessionState = {
   id: string;
@@ -28,45 +46,43 @@ type SessionState = {
 
 let session: SessionState | null = null;
 
-const TF_SECONDS = 60;
+/** Symbol to play back when the caller does not name one. */
+const DEFAULT_SYMBOL = "BTCUSD";
+
+/** Enough 1m bars to cover a trading day with room to spare. */
+const SESSION_BAR_LIMIT = 2000;
+
+/**
+ * Bars revealed before playback begins. Starting exactly at the first bar
+ * leaves the chart auto-fitting a single candle across the whole pane, which
+ * looks broken for the first few seconds.
+ */
+const WARMUP_BARS = 30;
 
 function emit(action: string, opts: { speed?: number; cursorTimestamp?: number } = {}): void {
-  publish("market-data", {
-    eventType: "ReplayStateChanged",
-    action,
-    ...opts,
-  });
+  publish("market-data", { eventType: "ReplayStateChanged", action, ...opts });
 }
 
 function dayBounds(sessionDate: string): { startMs: number; endMs: number } {
-  const start = new Date(`${sessionDate}T00:00:00`);
-  const startMs = start.getTime();
+  const startMs = new Date(`${sessionDate}T00:00:00`).getTime();
   return { startMs, endMs: startMs + 24 * 60 * 60 * 1000 };
-}
-
-/**
- * Symbol to play back. Passed in by the caller rather than read from the
- * trading store: the store imports the api facade, which imports this module,
- * and closing that cycle left `demoApi` undefined at module-init time.
- */
-const DEFAULT_SYMBOL = "BTCUSD";
-
-/** Shift the bundled series so its final bar lands on the current minute. */
-function shiftedBars(raw: { time: number; open: number; high: number; low: number; close: number; volume?: number }[]) {
-  if (raw.length === 0) return [];
-  const nowSec = Math.floor(Date.now() / 1000);
-  const currentBucket = nowSec - (nowSec % TF_SECONDS);
-  const delta = currentBucket - raw[raw.length - 1]!.time;
-  return raw.map((c) => ({ ...c, time: c.time + delta }));
 }
 
 export async function getSession(
   sessionDate: string,
   symbol: string = DEFAULT_SYMBOL,
+  accountId?: string,
 ): Promise<ReplaySessionPayload> {
-  const raw = await loadSeries(symbol, "1m");
-  const bars = shiftedBars(raw);
+  const adapter = getAdapter();
   const { startMs, endMs } = dayBounds(sessionDate);
+
+  const bars = await adapter.marketData.getCandles({
+    symbol,
+    timeframe: "1m",
+    limit: SESSION_BAR_LIMIT,
+    fromMs: startMs,
+    toMs: endMs,
+  });
 
   const tickBuffer = bars
     .filter((c) => {
@@ -83,21 +99,30 @@ export async function getSession(
     }));
 
   // Trades closed inside the replayed window become markers on the chart.
-  const tradeEvents: ReplaySessionPayload["tradeEvents"] = getClosedPositions()
-    .filter((p) => {
-      if (!p.closedAt) return false;
-      const closedMs = Date.parse(p.closedAt);
-      return Number.isFinite(closedMs) && closedMs >= startMs && closedMs < endMs;
-    })
-    .map((p) => ({
-      id: p.id,
-      type: "exit" as const,
-      timestamp: p.closedAt as string,
-      symbolName: p.symbolName,
-      side: p.side,
-      price: p.exitPrice,
-      pnl: p.realizedPnl,
-    }));
+  let tradeEvents: ReplaySessionPayload["tradeEvents"] = [];
+  if (adapter.trading && accountId) {
+    try {
+      const closed = await adapter.trading.getClosedPositions(accountId);
+      tradeEvents = closed.data
+        .filter((p) => {
+          if (!p.closedAt) return false;
+          const closedMs = Date.parse(p.closedAt);
+          return Number.isFinite(closedMs) && closedMs >= startMs && closedMs < endMs;
+        })
+        .map((p) => ({
+          id: p.id,
+          type: "exit" as const,
+          timestamp: p.closedAt as string,
+          symbolName: p.symbolName,
+          side: p.side,
+          price: p.exitPrice,
+          pnl: p.realizedPnl,
+        }));
+    } catch {
+      // Markers are a nicety — a gateway that cannot list closed trades still
+      // gets a working replay.
+    }
+  }
 
   return {
     replaySession: {
@@ -118,29 +143,18 @@ export async function getSession(
   };
 }
 
-/**
- * Bars revealed before playback begins. Starting exactly at the first bar
- * leaves the chart auto-fitting a single candle across the whole pane, which
- * looks broken for the first few seconds.
- */
-const WARMUP_BARS = 30;
-
 export async function start(
   sessionDate: string,
   speed = 1,
   symbol: string = DEFAULT_SYMBOL,
+  accountId?: string,
 ): Promise<{ speed: number; seed: null }> {
-  const payload = await getSession(sessionDate, symbol);
+  const payload = await getSession(sessionDate, symbol, accountId);
   const buffer = payload.tickBuffer;
   const first =
     buffer.length > 0 ? (buffer[Math.min(WARMUP_BARS, buffer.length - 1)]?.t ?? null) : null;
-  session = {
-    id: uid(),
-    status: "PLAYING",
-    speed,
-    cursorTimestamp: first,
-    sessionDate,
-  };
+
+  session = { id: uid(), status: "PLAYING", speed, cursorTimestamp: first, sessionDate };
   emit("started", { speed, ...(first != null ? { cursorTimestamp: first } : {}) });
   return { speed, seed: null };
 }

@@ -1,4 +1,4 @@
-import { publish } from "./bus.ts";
+import { DEMO_CHANNELS, publish } from "./bus.ts";
 import { getTickPrices, primeTickPrices } from "./candles.ts";
 import { mark } from "./engine.ts";
 import { DEMO_SYMBOLS } from "./instruments.ts";
@@ -49,7 +49,7 @@ function emitTick(cursor: SymbolCursor): void {
   if (price == null || !Number.isFinite(price) || price <= 0) return;
 
   const half = cursor.spread / 2;
-  publish("market-data", {
+  publish(DEMO_CHANNELS.ticks, {
     eventType: "MarketTick",
     symbol: cursor.symbol,
     bid: price - half,

@@ -29,7 +29,7 @@ Advanced charting · full drawing-tool suite · 8 indicators · session replay �
 - [Project structure](#project-structure)
 - [Building on OpenCharts](#building-on-opencharts)
 - [Refreshing the bundled market data](#refreshing-the-bundled-market-data)
-- [Bring your own data / backend](#bring-your-own-data--backend)
+- [Integrating OpenCharts](#integrating-opencharts)
 - [Adding instruments](#adding-instruments)
 - [Configuration](#configuration)
 - [Scripts](#scripts)
@@ -194,9 +194,9 @@ marketing copy:
 
 ## How it works
 
-The UI is **backend-agnostic**. It talks to two service modules — a REST-shaped
-`api` and a streaming `wsClient` — and never cares where the data comes from. In
-this repo both are implemented by a small in-browser **demo layer**:
+The UI is **backend-agnostic**. It talks to an internal `api` / `wsClient` pair,
+and those resolve against whichever `OpenChartsAdapter` is installed. The
+bundled demo backend is simply the adapter that ships by default:
 
 ```
                 ┌─────────────────────────────────────────────┐
@@ -310,9 +310,14 @@ src/
 │  └─ utils.ts
 ├─ components/              # dialogs, mobile panel, TradingView embeds, ui primitives
 ├─ hooks/                   # drawings, chart prefs, trader prefs, trade sound…
+├─ adapter/                # the public integration surface
+│  ├─ types.ts             #   the OpenChartsAdapter contract
+│  ├─ provider.tsx         #   <OpenChartsProvider adapter={...}>
+│  ├─ demo.ts              #   the bundled backend, as a reference adapter
+│  └─ conformance.ts       #   a test suite adapter authors can run
 ├─ services/
-│  ├─ api.ts                # REST-shaped facade (demo-backed)
-│  ├─ ws.ts                 # streaming client (demo-backed)
+│  ├─ api.ts                # internal facade, resolves against the adapter
+│  ├─ ws.ts                 # adapter events → the terminal's channels
 │  ├─ api/                  # legacy HTTP clients from the original platform;
 │  │                        #   chart-templates.ts is localStorage-backed and live
 │  ├─ queries.ts            # TanStack Query hooks
@@ -446,25 +451,90 @@ This re-pulls up to 1000 bars per symbol per timeframe and rewrites the bundled 
 plus `data/manifest.json`. The candles are genuine market history — OpenCharts
 never ships synthetic OHLC.
 
-## Bring your own data / backend
+## Integrating OpenCharts
 
-To connect OpenCharts to real (or your own simulated) data, implement two files
-against your APIs — the rest of the app is untouched:
+**You do not fork OpenCharts to use your own data.** Implement one interface,
+hand it to the provider, and the whole terminal — chart, order ticket, positions,
+replay — runs against your backend.
 
-1. **`src/services/api.ts`** — the request/response methods the UI calls
-   (`getSymbols`, `getCandles`, `placeOrder`, `getPositions`, `closePosition`, …).
-   `src/services/demo/api.ts` is the complete list of what the terminal actually
-   reaches for; the expected shapes are in `src/services/schemas.ts`.
-2. **`src/services/ws.ts`** — a client exposing
-   `connect` / `subscribe(channel, handler)` / `subscribeAccounts` / `onStateChange`.
-   Publish `MarketTick`, `CandleUpdate`, `Position*`, `Order*` and `EquityUpdated`
-   events on the `market-data` / `positions` / `orders` / `account` channels.
+```tsx
+import { OpenChartsProvider, type OpenChartsAdapter } from "opencharts/adapter";
 
-`src/components/MarketDataBridge.tsx` shows exactly which events the UI consumes.
+const adapter: OpenChartsAdapter = {
+  name: "my-broker",
+  marketData: {
+    getSymbols: () => myApi.instruments(),
+    getCandles: ({ symbol, timeframe, limit, fromMs, toMs }) =>
+      myApi.candles(symbol, timeframe, { limit, fromMs, toMs }),
+    subscribe: (handler) =>
+      myFeed.on("quote", (q) =>
+        handler({ type: "tick", symbol: q.symbol, bid: q.bid, ask: q.ask }),
+      ),
+  },
+};
 
-Two leftovers from the original platform help if you go this route:
-`src/services/api/request.ts` is a working HTTP client with token refresh, and
-the Vite dev server already proxies `/api` and `/ws` to `http://localhost:3000`.
+<OpenChartsProvider adapter={adapter}>
+  <TradingPage />
+</OpenChartsProvider>;
+```
+
+That is the minimum: **`marketData` is the only required part.** Add `trading`
+to enable the order ticket and positions, and `storage` to keep a trader's
+drawings, templates and journal with their account instead of their browser.
+
+### The contract
+
+Defined in [`src/adapter/types.ts`](src/adapter/types.ts):
+
+| Group | Required | What it covers |
+| --- | --- | --- |
+| `marketData` | **yes** | `getSymbols`, `getCandles`, `subscribe`, and optionally `getQuote`, `connect`/`disconnect`, `onConnectionChange`, `setSymbolInterest` |
+| `trading` | no | accounts, positions, orders, closed trades, place/modify/cancel, and a `subscribe` for fills and account updates |
+| `storage` | no | a three-method key/value driver for drawings, chart templates and journal entries |
+
+Without `trading`, the terminal runs as a read-only chart and trading calls
+fail with a clear message rather than silently doing nothing.
+
+### Rules the terminal relies on
+
+- **Candle times are seconds, not milliseconds**, and bars come back oldest
+  first.
+- **`toMs` is exclusive.** The chart pages backwards with `fromMs`/`toMs`; an
+  adapter that ignores the window makes scroll-back loop, and one that treats
+  `toMs` as inclusive duplicates a bar per page.
+- **Every method returns a promise and rejects on failure** — never throw
+  synchronously. Rejection messages are shown to the trader as-is, so write
+  them for a human.
+- **`subscribe` returns an unsubscribe function**, and must stop delivering
+  once it is called.
+
+### Verify your adapter
+
+A conformance suite ships with the project and checks the things that fail
+quietly:
+
+```ts
+import { runAdapterConformance } from "opencharts/adapter/conformance";
+
+runAdapterConformance("my-broker", () => createMyAdapter(), { symbol: "BTCUSD" });
+```
+
+Trading checks submit and close orders, so they are opt-in
+(`allowTrading: true`) — **run them against a paper or sandbox gateway only.**
+
+### A worked example
+
+[`examples/binance-adapter/`](examples/binance-adapter/) is a complete live
+adapter for Binance's public API in a single file: REST klines, book-ticker
+websocket streams, reconnect with backoff, composed with the bundled paper
+engine so you can trade live prices risk-free.
+
+```bash
+VITE_ADAPTER=binance npm run dev
+```
+
+It is the same terminal in the screenshot above, with nothing patched — only a
+different adapter installed.
 
 ## Adding instruments
 

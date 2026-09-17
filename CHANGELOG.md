@@ -7,6 +7,37 @@ major version is `0`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **The adapter contract** (`src/adapter/`). Implement `OpenChartsAdapter` —
+  `marketData` required, `trading` and `storage` optional — pass it to
+  `<OpenChartsProvider>`, and the terminal runs against your backend. Nothing
+  in the project needs to be forked or patched to integrate it.
+- **A conformance suite** (`runAdapterConformance`) covering the parts of the
+  contract that fail quietly: bar ordering, second-precision timestamps, the
+  exclusive `toMs` paging window, unsubscribe actually unsubscribing, and
+  rejections arriving as rejected promises. Trading checks are opt-in because
+  they submit orders.
+- **A live example adapter** for Binance's public API in
+  `examples/binance-adapter/`, composed with the paper engine so live prices
+  can be traded risk-free. Run it with `VITE_ADAPTER=binance npm run dev`.
+
+### Changed
+
+- `services/api.ts` and `services/ws.ts` are now a thin mapping onto the
+  installed adapter rather than being wired directly to the demo backend. The
+  demo is expressed through the same public contract a third party implements.
+- Session replay is built on `marketData.getCandles`, so it works with any
+  adapter instead of requiring one of its own.
+- Drawings, chart templates and journal entries route through the adapter's
+  optional `storage` driver, defaulting to `localStorage`. Device-local
+  preferences deliberately stay local.
+
+### Fixed
+
+- Trading calls rejected with a synchronous throw in places, which skipped
+  callers' `.catch()` handlers. Everything returns a rejected promise now.
+
 ## [0.2.0] — 2026-09-17
 
 The first tagged release. It follows a full audit of the codebase: the
