@@ -46,3 +46,17 @@ export function pnlClass(value: number): string {
   if (value < 0) return "text-destructive";
   return "text-muted-foreground";
 }
+
+/**
+ * Local calendar date as YYYY-MM-DD.
+ *
+ * `toISOString().slice(0, 10)` returns the UTC date, which is a different day
+ * from the user's for most of the world — a date picker defaulting to it can
+ * land on a day the app has no data for.
+ */
+export function toLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}

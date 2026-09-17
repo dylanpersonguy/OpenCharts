@@ -65,14 +65,22 @@ export function useStaleData(): boolean {
     return false;
   })();
 
+  const degraded = state !== "connected" || marketDataInterrupted;
+
+  // Recovery clears staleness during render (React's documented "adjust state
+  // when a prop changes" pattern) rather than from an effect, so the banner
+  // disappears in the same commit that reports the feed healthy again.
+  const [wasDegraded, setWasDegraded] = useState(degraded);
+  if (wasDegraded !== degraded) {
+    setWasDegraded(degraded);
+    if (!degraded && stale) setStale(false);
+  }
+
   useEffect(() => {
-    if (state === "connected" && !marketDataInterrupted) {
-      setStale(false);
-      return;
-    }
+    if (!degraded) return;
     const timer = setTimeout(() => setStale(true), 10_000);
     return () => clearTimeout(timer);
-  }, [marketDataInterrupted, state]);
+  }, [degraded]);
 
   return stale;
 }

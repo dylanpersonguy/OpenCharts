@@ -129,13 +129,17 @@ export function MarketClosedBanner({ symbolInfo }: Props) {
   if (category.toUpperCase() === "CRYPTO") return null;
 
   // If the feed is actively delivering ticks for this symbol, the market is open.
+  // `now` ticks once a second; using it (instead of reading the clock during
+  // render) keeps the component pure and makes every check below agree on one
+  // instant.
+  const nowMs = now.getTime();
   const symbolTick = ticks[symbolInfo.name ?? ""];
-  if (symbolTick && Date.now() - symbolTick.timestamp < LIVE_TICK_GRACE_MS) return null;
+  if (symbolTick && nowMs - symbolTick.timestamp < LIVE_TICK_GRACE_MS) return null;
 
   // No tick yet — give the WebSocket connection time to deliver the first tick
   // before falling back to schedule-based logic. Prevents a false "closed"
   // flash on page load and after tab resume.
-  if (!symbolTick && Date.now() - mountedAt < STARTUP_HOLDOFF_MS) return null;
+  if (!symbolTick && nowMs - mountedAt < STARTUP_HOLDOFF_MS) return null;
 
   const tradingHours = ((symbolInfo as Record<string, unknown>).tradingHours ??
     []) as TradingHours[];

@@ -1,11 +1,11 @@
 import { useEffect, useMemo } from "react";
-import { accountsApi } from "../../services/api/accounts.ts";
+import { api } from "../../services/api.ts";
 import { useReplaySession } from "../../services/queries.ts";
 import type { Candle } from "../../services/schemas.ts";
 import { useTradingStore } from "../../services/store.tsx";
 import { toast } from "../../services/toast.ts";
 
-type ReplaySessionData = Awaited<ReturnType<typeof accountsApi.replayGetSession>>;
+type ReplaySessionData = NonNullable<Awaited<ReturnType<typeof api.replayGetSession>>>;
 type ReplayTradeEvents = ReplaySessionData["tradeEvents"];
 type TickBar = ReplaySessionData["tickBuffer"][number];
 
@@ -46,8 +46,13 @@ export function useReplayChartData(accountId: string | null): {
   const replaySessionDate = useTradingStore((s) => s.replaySessionDate);
   const replayCursorTimestamp = useTradingStore((s) => s.replayCursorTimestamp);
   const setSelectedSymbol = useTradingStore((s) => s.setSelectedSymbol);
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
 
-  const { data } = useReplaySession(isReplaying ? accountId : null, replaySessionDate);
+  const { data } = useReplaySession(
+    isReplaying ? accountId : null,
+    replaySessionDate,
+    selectedSymbol,
+  );
 
   // Focus the chart on the replayed symbol once the session loads.
   const replaySymbol = isReplaying ? (data?.meta?.primarySymbol ?? null) : null;
@@ -61,7 +66,7 @@ export function useReplayChartData(accountId: string | null): {
     if (!isReplaying || !data || !replaySessionDate || !accountId) return;
     if (data.tickBuffer.length > 0) return;
     toast.warning("Replay unavailable", emptySessionReason(data, replaySessionDate));
-    accountsApi.replayStop(accountId, replaySessionDate).catch(() => null);
+    api.replayStop(accountId, replaySessionDate).catch(() => null);
     useTradingStore.getState().onReplayStateChanged("stopped");
   }, [isReplaying, data, replaySessionDate, accountId]);
 

@@ -4,11 +4,12 @@ export const TIMEFRAMES = ["1m", "5m", "15m", "30m", "1h", "4h", "1d", "1w"] as 
 export type Timeframe = (typeof TIMEFRAMES)[number];
 
 /**
- * Master switch for session replay (HUD + scrubber). Disabled on the live
- * terminal until the feature is fully QA'd — flip to `true` to re-enable the
- * replay controls everywhere they mount.
+ * Master switch for session replay (HUD + scrubber). Backed by the demo replay
+ * provider in services/demo/replay.ts: the buffer is the bundled 1m history for
+ * the charted symbol and the transport state is broadcast on the same channel
+ * the real backend used.
  */
-export const REPLAY_ENABLED = false;
+export const REPLAY_ENABLED = true;
 
 export const CHART_COLORS = {
   dark: {

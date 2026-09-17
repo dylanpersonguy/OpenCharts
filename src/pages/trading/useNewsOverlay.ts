@@ -66,6 +66,15 @@ export function useNewsOverlay(
     safeStorage.setItem("newsOverlayConfig", JSON.stringify(newsConfig));
   }, [newsConfig]);
 
+  // Past/future filtering needs a clock. Keep it in state on a one-minute
+  // cadence rather than reading Date.now() inside the memo: render stays pure
+  // and the split between past and future events actually refreshes over time.
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Extract currency pair from symbol
   const symbolCurrencies = useMemo(() => extractCurrencies(selectedSymbol), [selectedSymbol]);
   const { data: rawCalendarData } = useEconomicCalendar(symbolCurrencies);
@@ -73,7 +82,7 @@ export function useNewsOverlay(
   // Filter events based on config
   const calendarEvents = useMemo(() => {
     if (!newsConfig.enabled) return [];
-    const now = Date.now();
+    const now = nowMs;
     return (rawCalendarData || []).filter((e: EconomicCalendarEvent) => {
       if (e.impact === "high" && !newsConfig.showHigh) return false;
       if (e.impact === "medium" && !newsConfig.showMedium) return false;
@@ -83,7 +92,7 @@ export function useNewsOverlay(
       if (eventTime > now && !newsConfig.showFuture) return false;
       return true;
     });
-  }, [rawCalendarData, newsConfig]);
+  }, [rawCalendarData, newsConfig, nowMs]);
 
   // Render news markers on chart (vertical lines + flag icons)
   useEffect(() => {

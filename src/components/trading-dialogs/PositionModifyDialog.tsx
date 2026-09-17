@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "../../services/api";
 import { toast } from "../../services/toast";
 import { cn, formatCurrency, formatNumber } from "@/lib/utils";
@@ -46,22 +46,17 @@ export function PositionModifyDialog({
   isFeedConnected = true,
 }: PositionModifyDialogProps) {
   const { formatQty, unitLabel, isFutures, instrumentType } = useInstrumentLabels();
-  const [tp, setTp] = useState("");
-  const [sl, setSl] = useState("");
+  // Mounted with `key={position.id}` by the parent, so switching positions
+  // gives a fresh instance and these initialisers run against the new one.
+  // (Previously an effect copied the position into state after mount, which is
+  // where the stale-TP/SL bug lived.)
+  const [tp, setTp] = useState(() =>
+    position?.takeProfit != null ? String(position.takeProfit) : "",
+  );
+  const [sl, setSl] = useState(() => (position?.stopLoss != null ? String(position.stopLoss) : ""));
   const [partialQty, setPartialQty] = useState("");
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<"modify" | "partial">("modify");
-
-  // BUG-62 FIX: Reinitialize form fields when the selected position changes.
-  // Previously used useState() callback which only runs on initial mount,
-  // meaning switching positions kept stale TP/SL values.
-  useEffect(() => {
-    if (position) {
-      setTp(position.takeProfit != null ? String(position.takeProfit) : "");
-      setSl(position.stopLoss != null ? String(position.stopLoss) : "");
-      setPartialQty("");
-    }
-  }, [position]);
 
   if (!position) return null;
 

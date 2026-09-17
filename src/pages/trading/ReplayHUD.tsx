@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { Play, Pause, Square } from "lucide-react";
-import { cn } from "../../lib/utils.ts";
+import { cn, toLocalDateString } from "../../lib/utils.ts";
 import { useTradingStore } from "../../services/store.tsx";
-import { accountsApi } from "../../services/api/accounts.ts";
+import { api } from "../../services/api.ts";
 import { safeSession } from "../../lib/safe-storage.ts";
 
 const SPEED_OPTIONS = [0.5, 1, 2, 5, 10] as const;
@@ -23,7 +23,7 @@ export function ReplayHUD({ accountId }: { accountId: string }) {
 
   const storageKey = `replay_session_date_${accountId}`;
   const [sessionDate, setSessionDate] = useState<string>(
-    () => safeSession.getItem(storageKey) ?? new Date().toISOString().slice(0, 10),
+    () => safeSession.getItem(storageKey) ?? toLocalDateString(),
   );
 
   const handleDateChange = (date: string) => {
@@ -33,24 +33,24 @@ export function ReplayHUD({ accountId }: { accountId: string }) {
 
   const handleStart = () => {
     setReplaySessionDate(sessionDate);
-    accountsApi.replayStart(accountId, sessionDate, replaySpeed).catch(() => null);
+    api.replayStart(accountId, sessionDate, replaySpeed).catch(() => null);
   };
 
   const handlePause = () => {
-    accountsApi.replayPause(accountId, sessionDate).catch(() => null);
+    api.replayPause(accountId, sessionDate).catch(() => null);
   };
 
   const handleResume = () => {
-    accountsApi.replayResume(accountId, sessionDate).catch(() => null);
+    api.replayResume(accountId, sessionDate).catch(() => null);
   };
 
   const handleStop = () => {
-    accountsApi.replayStop(accountId, sessionDate).catch(() => null);
+    api.replayStop(accountId, sessionDate).catch(() => null);
   };
 
   const handleSpeed = (speed: Speed) => {
     if (!isReplaying) return;
-    accountsApi.replaySetSpeed(accountId, sessionDate, speed).catch(() => null);
+    api.replaySetSpeed(accountId, sessionDate, speed).catch(() => null);
   };
 
   return (
@@ -64,7 +64,7 @@ export function ReplayHUD({ accountId }: { accountId: string }) {
           type="date"
           value={sessionDate}
           onChange={(e) => handleDateChange(e.target.value)}
-          max={new Date().toISOString().slice(0, 10)}
+          max={toLocalDateString()}
           className="text-[11px] bg-transparent border border-border rounded px-1 py-0 text-foreground w-[7.5rem] tabular-nums"
         />
       ) : (

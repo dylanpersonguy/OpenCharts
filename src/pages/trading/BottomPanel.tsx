@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { TrendingUp, Clock, History, Globe, Newspaper, Bot } from "lucide-react";
+import { BookOpen, Clock, Globe, History, Newspaper, TrendingUp } from "lucide-react";
 import { useAuthStore } from "../../services/store.tsx";
 import { useTradingStore } from "../../services/store.tsx";
 import {
@@ -16,7 +16,6 @@ import type {
 import type { Account, ClosedPosition, Order, Position } from "../../services/schemas.ts";
 import { Button } from "../../components/ui/button.tsx";
 import { TradeJournalPanel } from "../../components/TradingDialogs.tsx";
-import { AiTraderPanel } from "../AiTraderPage.tsx";
 import { TradingViewEconomicCalendar } from "../../components/TradingViewWidgets.tsx";
 import { toast } from "../../services/toast.ts";
 import { formatCurrency, formatNumber, formatDate, cn, pnlClass } from "../../lib/utils.ts";
@@ -39,9 +38,9 @@ function getErrorMessage(error: unknown): string {
 }
 
 export interface BottomPanelProps {
-  tab: "positions" | "orders" | "history" | "journal" | "calendar" | "news" | "ai-trader";
+  tab: "positions" | "orders" | "history" | "journal" | "calendar" | "news";
   onTabChange: (
-    t: "positions" | "orders" | "history" | "journal" | "calendar" | "news" | "ai-trader",
+    t: "positions" | "orders" | "history" | "journal" | "calendar" | "news",
   ) => void;
   positions: Position[];
   orders: Order[];
@@ -55,7 +54,6 @@ export interface BottomPanelProps {
   onCreateJournal: (data: CreateJournalEntryInput) => void;
   onUpdateJournal: (id: string, data: UpdateJournalEntryInput) => void;
   onDeleteJournal: (id: string) => void;
-  aiTraderEnabled?: boolean;
   height?: number;
   isFeedConnected?: boolean;
 }
@@ -75,7 +73,6 @@ export function BottomPanel({
   onCreateJournal,
   onUpdateJournal,
   onDeleteJournal,
-  aiTraderEnabled,
   height = 220,
   isFeedConnected = true,
 }: BottomPanelProps) {
@@ -185,10 +182,9 @@ export function BottomPanel({
     { key: "positions", label: "Positions", icon: TrendingUp, count: openPositions.length },
     { key: "orders", label: "Orders", icon: Clock, count: pendingOrders.length },
     { key: "history", label: "Trade History", icon: History },
-    // { key: "journal", label: "Journal", icon: BookOpen }, // hidden pending QA (PS-285)
+    { key: "journal", label: "Journal", icon: BookOpen, count: journalEntries.length },
     { key: "calendar", label: "Calendar", icon: Globe },
     { key: "news", label: "News", icon: Newspaper },
-    ...(aiTraderEnabled ? [{ key: "ai-trader" as const, label: "AI Trader", icon: Bot }] : []),
   ];
 
   return (
@@ -293,7 +289,6 @@ export function BottomPanel({
         )}
         {tab === "calendar" && <EconomicCalendar />}
         {tab === "news" && <NewsFeed />}
-        {tab === "ai-trader" && <AiTraderPanel accountId={accountId} />}
       </div>
     </div>
   );

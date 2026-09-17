@@ -17,36 +17,46 @@ function sortByZ(list: DrawingLine[]): DrawingLine[] {
   return [...list].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
 }
 
+const NO_DRAWINGS: DrawingLine[] = [];
+
 export function useChartDrawings(symbol: string, timeframe: string) {
-  const [drawings, setDrawings] = useState<DrawingLine[]>([]);
-  const symbolRef = useRef(symbol);
-  const timeframeRef = useRef(timeframe);
+  // State is tagged with the symbol it belongs to. Switching symbols therefore
+  // needs no reset: drawings loaded for the previous symbol simply stop
+  // matching and render as empty until the new set arrives. (The old code
+  // cleared state from an effect, which cost an extra render and briefly
+  // showed the wrong symbol's drawings.)
+  const [loaded, setLoaded] = useState<{ symbol: string; list: DrawingLine[] }>({
+    symbol,
+    list: NO_DRAWINGS,
+  });
+  const drawings = loaded.symbol === symbol ? loaded.list : NO_DRAWINGS;
+  const setDrawings = useCallback(
+    (list: DrawingLine[]) => setLoaded({ symbol, list }),
+    [symbol],
+  );
   // Mirror of `drawings` so mutators can read current state synchronously
   // (needed to capture `before` snapshots for undo without stale closures).
+  // Only ever touched from event handlers and async callbacks, never render.
   const drawingsRef = useRef<DrawingLine[]>([]);
   const undoStackRef = useRef<HistoryOp[]>([]);
   const redoStackRef = useRef<HistoryOp[]>([]);
-
-  useEffect(() => {
-    symbolRef.current = symbol;
-    timeframeRef.current = timeframe;
-  });
 
   // Drawings load per symbol and are shared across timeframes (TradingView
   // behavior) — switching TF keeps them in place with no refetch.
   useEffect(() => {
     let cancelled = false;
-    setDrawings([]);
-    drawingsRef.current = [];
-    undoStackRef.current = [];
-    redoStackRef.current = [];
+    // Everything is swapped when the new symbol's drawings land, so the effect
+    // body itself stays free of state and ref mutation. Until then the tagged
+    // state below renders as empty rather than showing the old symbol's work.
     api.chartDrawings
       .list(symbol)
       .then((data) => {
         if (cancelled) return;
         const sorted = sortByZ(data ?? []);
-        setDrawings(sorted);
         drawingsRef.current = sorted;
+        undoStackRef.current = [];
+        redoStackRef.current = [];
+        setLoaded({ symbol, list: sorted });
       })
       .catch(() => {});
     return () => {
@@ -59,21 +69,21 @@ export function useChartDrawings(symbol: string, timeframe: string) {
   const applyAdd = useCallback((d: DrawingLine) => {
     drawingsRef.current = sortByZ([...drawingsRef.current, d]);
     setDrawings(drawingsRef.current);
-    api.chartDrawings.save(symbolRef.current, timeframeRef.current, d).catch(() => {});
-  }, []);
+    api.chartDrawings.save(symbol, timeframe, d).catch(() => {});
+  }, [setDrawings, symbol, timeframe]);
 
   // The drawings POST endpoint upserts by drawingId, so edits reuse save().
   const applyUpdate = useCallback((d: DrawingLine) => {
     drawingsRef.current = sortByZ(drawingsRef.current.map((x) => (x.id === d.id ? d : x)));
     setDrawings(drawingsRef.current);
-    api.chartDrawings.save(symbolRef.current, timeframeRef.current, d).catch(() => {});
-  }, []);
+    api.chartDrawings.save(symbol, timeframe, d).catch(() => {});
+  }, [setDrawings, symbol, timeframe]);
 
   const applyRemove = useCallback((id: string) => {
     drawingsRef.current = drawingsRef.current.filter((x) => x.id !== id);
     setDrawings(drawingsRef.current);
     api.chartDrawings.remove(id).catch(() => {});
-  }, []);
+  }, [setDrawings]);
 
   const pushHistory = useCallback((op: HistoryOp) => {
     undoStackRef.current.push(op);
@@ -115,8 +125,8 @@ export function useChartDrawings(symbol: string, timeframe: string) {
     }
     drawingsRef.current = [];
     setDrawings([]);
-    api.chartDrawings.clear(symbolRef.current).catch(() => {});
-  }, [pushHistory]);
+    api.chartDrawings.clear(symbol).catch(() => {});
+  }, [pushHistory, setDrawings, symbol]);
 
   // ── Undo / redo ──
 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { api } from "../../services/api";
 import { toast } from "../../services/toast";
 import { cn, formatNumber } from "@/lib/utils";
@@ -23,28 +23,25 @@ interface OrderModifyDialogProps {
   tick?: { bid: number; ask: number };
 }
 
+/**
+ * The parent mounts this with `key={order.id}`, so each order gets a fresh
+ * instance and the form initialises straight from props. That replaces an
+ * effect that copied the order into state on every change — one render cycle
+ * shorter, and no window where the fields show the previous order's values.
+ */
 export function OrderModifyDialog({ order, onClose, onSaved, tick }: OrderModifyDialogProps) {
   const { unitLabelCap, isFutures } = useInstrumentLabels();
-  const [price, setPrice] = useState("");
-  const [quantity, setQuantity] = useState("");
-  const [tp, setTp] = useState("");
-  const [sl, setSl] = useState("");
+  const [price, setPrice] = useState(() =>
+    order?.price != null
+      ? String(order.price)
+      : order?.stopPrice != null
+        ? String(order.stopPrice)
+        : "",
+  );
+  const [quantity, setQuantity] = useState(() => (order ? String(order.quantity) : ""));
+  const [tp, setTp] = useState(() => (order?.takeProfit != null ? String(order.takeProfit) : ""));
+  const [sl, setSl] = useState(() => (order?.stopLoss != null ? String(order.stopLoss) : ""));
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (order) {
-      setPrice(
-        order.price != null
-          ? String(order.price)
-          : order.stopPrice != null
-            ? String(order.stopPrice)
-            : "",
-      );
-      setQuantity(String(order.quantity));
-      setTp(order.takeProfit != null ? String(order.takeProfit) : "");
-      setSl(order.stopLoss != null ? String(order.stopLoss) : "");
-    }
-  }, [order]);
 
   if (!order) return null;
 

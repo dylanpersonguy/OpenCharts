@@ -53,12 +53,17 @@ export function useSlTpDrag(
   } | null>(null);
   const [dragPrice, setDragPrice] = useState<DragPriceState | null>(null);
 
+  // Latest-value refs for the long-lived pointer handlers below. Assigned from
+  // an effect rather than during render: render must stay side-effect free, and
+  // the handlers only run after paint, so they always see the committed values.
   const onModifyPositionRef = useRef(onModifyPosition);
-  onModifyPositionRef.current = onModifyPosition;
   const pipDigitsRef = useRef(pipDigits);
-  pipDigitsRef.current = pipDigits;
   const symbolInfoRef = useRef(symbolInfo);
-  symbolInfoRef.current = symbolInfo;
+  useEffect(() => {
+    onModifyPositionRef.current = onModifyPosition;
+    pipDigitsRef.current = pipDigits;
+    symbolInfoRef.current = symbolInfo;
+  }, [onModifyPosition, pipDigits, symbolInfo]);
 
   useEffect(() => {
     const container = containerRef.current;

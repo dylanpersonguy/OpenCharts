@@ -292,20 +292,14 @@ export function useDeleteJournalEntry() {
   });
 }
 
-export function useAiTraderEnabled() {
+export function useReplaySession(
+  accountId: string | null,
+  sessionDate: string | null,
+  symbol?: string,
+) {
   return useQuery({
-    queryKey: ["ai-trader", "enabled"] as const,
-    queryFn: () => api.isAiTraderEnabled(),
-    staleTime: 60_000,
-    retry: 1,
-    refetchOnWindowFocus: true,
-  });
-}
-
-export function useReplaySession(accountId: string | null, sessionDate: string | null) {
-  return useQuery({
-    queryKey: queryKeys.replay.session(accountId!, sessionDate!),
-    queryFn: () => api.replayGetSession(accountId!, sessionDate!),
+    queryKey: [...queryKeys.replay.session(accountId!, sessionDate!), symbol ?? "auto"],
+    queryFn: () => api.replayGetSession(accountId!, sessionDate!, symbol),
     enabled: !!accountId && !!sessionDate,
     // 30s, not Infinity — replaying *today* a second time must pick up trades
     // and candles recorded since the previous run.

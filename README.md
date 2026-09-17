@@ -115,6 +115,17 @@ toolbar and removable individually or in bulk from the chart context menu.
 - Trade execution sound (mutable), connection indicator, market-closed banner
   and a dedicated mobile trading panel for narrow screens.
 
+### ⏯️ Session replay
+- Replay the charted symbol's 1-minute history with play / pause / stop, speeds
+  from 0.5× to 10×, and a scrubber to seek anywhere in the session.
+- Bars are revealed progressively as the cursor advances, and trades you closed
+  during the replayed window appear as markers.
+- Entirely client-driven — the clock runs in the browser off the bundled data.
+
+### 📓 Trade journal
+- Log entries per trade with notes, tags, an emotion and a rating, filterable by
+  symbol and scoped to the account. Entries persist in `localStorage`.
+
 ### 💵 Built-in paper trading
 - $100,000 starting balance, 100× leverage, no commission or swap.
 - **Market, limit and stop orders** with a real lifecycle: market fills at the
@@ -169,7 +180,9 @@ marketing copy:
 | Order validation | Real — quantity, price, side, stop placement, protective-level side and free margin are all checked, with the reason surfaced in a toast |
 | News tab | **Placeholder headlines**, labelled "Sample data" in the UI and attributed to no real outlet |
 | Economic calendar tab & technical-analysis gauge | TradingView embed widgets — real data, loaded from TradingView's CDN. The calendar has a toggle to a **sample** table, labelled as such |
-| Trade journal, trade calculator, AI trader, session replay | **Present in the code but not reachable** — journal and replay are flagged off pending QA, the AI trader is a stub, the calculator is never mounted |
+| Trade journal | **Working** — entries persist to `localStorage`, scoped per account |
+| Session replay | **Working** — plays the bundled 1m history for the charted symbol with play/pause/speed/seek |
+| Trade calculator | Present in the code but never mounted |
 | Account state (balance, positions, orders) | In-memory — **resets on reload** |
 | Drawings, chart prefs, templates, sound mute | Persisted in `localStorage` |
 
@@ -362,8 +375,8 @@ All four are expected to pass before a PR, and all four pass on `main`:
 
 ```bash
 npm run typecheck   # tsc --noEmit, strict, zero errors
-npm run lint        # ESLint 9 flat config, zero errors
-npm run test        # Vitest
+npm run lint        # ESLint 9 flat config, zero errors *and* zero warnings
+npm run test        # Vitest — 166 tests
 npm run build       # production bundle
 ```
 
@@ -398,9 +411,11 @@ margin maths and rounding are covered in
 - **Never touch `localStorage` directly** — use
   [`lib/safe-storage.ts`](src/lib/safe-storage.ts). Raw access throws in private
   mode, when site data is blocked, and on quota exhaustion.
-- **Flags gate whole panels.** `REPLAY_ENABLED` in `pages/trading/constants.ts`
-  hides the replay HUD and scrubber; the journal tab is commented out in
-  `BottomPanel.tsx`; the AI trader is a `null`-returning stub.
+- **`REPLAY_ENABLED`** in `pages/trading/constants.ts` still gates the replay
+  HUD and scrubber, should you want them off.
+- **Dates are local, not UTC.** Use `toLocalDateString()` from `lib/utils.ts`;
+  `toISOString().slice(0, 10)` is a different day for most of the world and put
+  the replay picker on a day with no data.
 - **React runs in `StrictMode`**, so chart effects mount twice in development —
   every series, primitive and subscription needs a working cleanup path.
 - **The demo engine is in-memory.** Anything you want to survive a reload has to
@@ -488,8 +503,8 @@ network requests. Drop those components if you want a strictly offline build.
 - Optional **posthog-js** analytics, off unless a key is set
 
 `react-router-dom` is present only to supply a `BrowserRouter` wrapper — there
-are no routes. Lint, typecheck and tests run on ESLint 9 (flat config),
-TypeScript 5.7 and Vitest.
+are no routes. Lint, typecheck and tests run on ESLint 9 (flat config, including
+the React Compiler rule set), TypeScript 5.7 and Vitest.
 
 ## Known limitations
 
@@ -508,13 +523,16 @@ TypeScript 5.7 and Vitest.
   items. Components that fabricated market analysis — a sentiment gauge and
   "STRONG BUY" trade signals derived from a hash of the symbol name — were
   deleted rather than left for someone to wire up.
-- **Dormant code from the original platform** ships in the repo: session replay
-  (`REPLAY_ENABLED = false`), the trade journal (hidden pending QA), the trade
-  calculator (never mounted), the AI trader (stubbed), challenge/risk-rule price
-  levels (inert because the demo account reports no risk limits).
-- **Test coverage is engine-first** — the paper engine, storage, id generation
-  and event bus are covered; the React components are not. Playwright is a
-  declared dev dependency but no end-to-end specs are checked in.
+- **Replay covers roughly the last 16 hours.** The session buffer is the bundled
+  1m history for the charted symbol, so picking an earlier date reports an empty
+  session rather than inventing data.
+- **The trade calculator is still unmounted**, and challenge/risk-rule price
+  levels stay inert because the demo account reports no risk limits.
+- **Coverage is logic-first.** The paper engine, indicators, replay, journal,
+  storage, ids, live P&L and the event bus are covered, plus the order ticket
+  and positions table at the component level. The chart itself is verified by
+  driving the running app, not by unit tests. Playwright is a declared dev
+  dependency but no end-to-end specs are checked in.
 - The production `build` runs Vite only; run `npm run typecheck` separately for
   full type checking.
 

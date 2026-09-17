@@ -21,7 +21,6 @@ import { posthog } from "../lib/posthog";
 import type { CreateJournalEntryInput, UpdateJournalEntryInput } from "../services/api/journal.ts";
 import { api } from "../services/api.ts";
 import {
-  useAiTraderEnabled,
   useCandles,
   useCreateJournalEntry,
   useDeleteJournalEntry,
@@ -34,7 +33,6 @@ import {
 import type { Order, PlaceOrderInput, Position, Symbol } from "../services/schemas.ts";
 import { useTradingStore } from "../services/store.tsx";
 import { toast } from "../services/toast.ts";
-import { AiTraderPanel } from "./AiTraderPage.tsx";
 import { BottomPanel } from "./trading/BottomPanel.tsx";
 import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
@@ -69,6 +67,12 @@ type ConfirmOrderState = {
   _submit: () => Promise<unknown>;
 } | null;
 
+/** Stored timeframe for a symbol, or the 15m default. */
+function readStoredTimeframe(symbol: string): Timeframe {
+  const saved = safeStorage.getItem(`tf_${symbol}`);
+  return saved && TIMEFRAMES.includes(saved as Timeframe) ? (saved as Timeframe) : "15m";
+}
+
 function getErrorMessage(err: unknown): string {
   if (err && typeof err === "object" && "message" in err) {
     const message = (err as ErrorWithMessage).message;
@@ -97,23 +101,21 @@ export function TradingPage() {
     replayVersion,
     isReplaying,
   } = useTradingStore();
-  // Chart timeframe persistence (#8)
-  const [timeframe, setTimeframe] = useState<Timeframe>(() => {
-    const saved = safeStorage.getItem(`tf_${selectedSymbol}`);
-    return saved && TIMEFRAMES.includes(saved as Timeframe) ? (saved as Timeframe) : "15m";
-  });
+  // Chart timeframe persistence (#8). Held per symbol in one map so switching
+  // symbols reads the stored timeframe during render — no reset effect, and no
+  // frame where the chart shows the previous symbol's timeframe.
+  const [timeframeBySymbol, setTimeframeBySymbol] = useState<Partial<Record<string, Timeframe>>>(
+    {},
+  );
+  const timeframe: Timeframe =
+    timeframeBySymbol[selectedSymbol] ?? readStoredTimeframe(selectedSymbol);
   const handleTimeframeChange = useCallback(
     (tf: Timeframe) => {
-      setTimeframe(tf);
+      setTimeframeBySymbol((prev) => ({ ...prev, [selectedSymbol]: tf }));
       safeStorage.setItem(`tf_${selectedSymbol}`, tf);
     },
     [selectedSymbol],
   );
-  // Restore timeframe when symbol changes
-  useEffect(() => {
-    const saved = safeStorage.getItem(`tf_${selectedSymbol}`);
-    if (saved && TIMEFRAMES.includes(saved as Timeframe)) setTimeframe(saved as Timeframe);
-  }, [selectedSymbol]);
 
   const [activeIndicators, setActiveIndicators] = useState<IndicatorType[]>([]);
   const [showIndicatorMenu, setShowIndicatorMenu] = useState(false);
@@ -143,11 +145,10 @@ export function TradingPage() {
     updateChartPreferences({ activePlugins: ids });
   }, []);
   const [bottomTab, setBottomTab] = useState<
-    "positions" | "orders" | "history" | "journal" | "calendar" | "news" | "ai-trader"
+    "positions" | "orders" | "history" | "journal" | "calendar" | "news"
   >("positions");
-  const { data: aiTraderEnabled } = useAiTraderEnabled();
   const [rightPanel, setRightPanel] = useState<
-    "order" | "dom" | "watchlist" | "news" | "ai-trader" | "tv-analysis"
+    "order" | "dom" | "watchlist" | "news" | "tv-analysis"
   >("order");
   const [showRightPanel, setShowRightPanel] = useState(true);
 
@@ -369,20 +370,22 @@ export function TradingPage() {
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
     return isMobile ? 500 : 400;
   }, []);
-  const [candleLimit, setCandleLimit] = useState(firstPaintCandleLimit);
+  // Which (symbol, timeframe) the deep-history fetch has been unlocked for.
+  // Deriving the limit from that tag means a symbol or timeframe switch drops
+  // back to the small first-paint request during render, with no reset effect.
+  const chartKey = `${selectedSymbol}:${timeframe}`;
+  const [deepenedFor, setDeepenedFor] = useState<string | null>(null);
+  const candleLimit = deepenedFor === chartKey ? deepCandleLimit : firstPaintCandleLimit;
   useEffect(() => {
-    setCandleLimit(firstPaintCandleLimit);
     // Wait long enough for the first-paint response to arrive and render
     // before firing the heavier deep-history request. 400 ms is a reasonable
-    // budget for a cached/warm DB response; users on fast connections will
+    // budget for a cached/warm response; users on fast connections will
     // see data before the deep load starts, avoiding visible re-draws.
-    const timer = window.setTimeout(() => {
-      setCandleLimit(deepCandleLimit);
-    }, 400);
+    const timer = window.setTimeout(() => setDeepenedFor(chartKey), 400);
     return () => {
       window.clearTimeout(timer);
     };
-  }, [selectedSymbol, timeframe, firstPaintCandleLimit, deepCandleLimit]);
+  }, [chartKey]);
   const { data: candles = [] } = useCandles(selectedSymbol, timeframe, candleLimit, replayVersion);
   // Replay: sliced 1m buffer + trade-event markers; null when not replaying.
   // While replayCandles is set, the live tick/candle feed is suppressed below
@@ -464,7 +467,6 @@ export function TradingPage() {
         onToggleRightPanel={() => setShowRightPanel((v) => !v)}
         tick={tick}
         symbolInfo={symbolInfo}
-        aiTraderEnabled={aiTraderEnabled?.enabled ?? false}
         isReplaying={isReplaying}
         replayAccountId={activeAccountId}
         activePlugins={activePlugins}
@@ -548,7 +550,6 @@ export function TradingPage() {
             onModifyOrder={setModifyingOrder}
             onSelectPositionSymbol={setSelectedSymbol}
             onSelectOrderSymbol={setSelectedSymbol}
-            aiTraderEnabled={aiTraderEnabled?.enabled ?? false}
             height={bottomPanelHeight}
             isFeedConnected={isFeedConnected}
             journalEntries={journalData?.entries || []}
@@ -622,11 +623,6 @@ export function TradingPage() {
                 <MarketNewsFeed symbol={selectedSymbol} />
               </div>
             )}
-            {rightPanel === "ai-trader" && (
-              <div className="flex-1 overflow-hidden">
-                <AiTraderPanel accountId={activeAccountId} />
-              </div>
-            )}
             {rightPanel === "tv-analysis" && (
               <div className="flex-1 overflow-hidden">
                 <TradingViewTechnicalAnalysis
@@ -698,6 +694,7 @@ export function TradingPage() {
 
       {/* Dialogs */}
       <PositionModifyDialog
+        key={modifyingPosition?.id ?? "no-position"}
         position={modifyingPosition}
         onClose={() => setModifyingPosition(null)}
         onSaved={() => setModifyingPosition(null)}
@@ -705,6 +702,7 @@ export function TradingPage() {
         isFeedConnected={isFeedConnected}
       />
       <OrderModifyDialog
+        key={modifyingOrder?.id ?? "no-order"}
         order={modifyingOrder}
         onClose={() => setModifyingOrder(null)}
         onSaved={() => setModifyingOrder(null)}

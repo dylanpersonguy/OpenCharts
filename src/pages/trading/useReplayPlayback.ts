@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useTradingStore } from "../../services/store.tsx";
 import { useReplaySession } from "../../services/queries.ts";
-import { accountsApi } from "../../services/api/accounts.ts";
+import { api } from "../../services/api.ts";
 
 /**
  * Maximum candles advanced per rAF frame when catching up (e.g. after seek).
@@ -49,7 +49,7 @@ function syncCursorToServer(
 ): void {
   if (now - lastSyncRef.current < SERVER_SYNC_MS || !sessionDate) return;
   lastSyncRef.current = now;
-  accountsApi
+  api
     .replayPatchSession(accountId, { sessionDate, cursorTimestamp: cursorMs })
     .catch(() => null);
 }
@@ -61,7 +61,7 @@ function syncCursorToServer(
 function finishReplay(accountId: string, sessionDate: string | null, endMs: number): void {
   useTradingStore.setState({ replayCursorTimestamp: endMs });
   if (sessionDate) {
-    accountsApi.replayStop(accountId, sessionDate).catch(() => null);
+    api.replayStop(accountId, sessionDate).catch(() => null);
   }
   useTradingStore.getState().onReplayStateChanged("stopped");
 }
@@ -83,7 +83,12 @@ export function useReplayPlayback(accountId: string) {
   const replayCursorTimestamp = useTradingStore((s) => s.replayCursorTimestamp);
   const replaySessionDate = useTradingStore((s) => s.replaySessionDate);
 
-  const { data: sessionData } = useReplaySession(isReplaying ? accountId : null, replaySessionDate);
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const { data: sessionData } = useReplaySession(
+    isReplaying ? accountId : null,
+    replaySessionDate,
+    selectedSymbol,
+  );
 
   // ── Stable refs (no re-render on change) ────────────────
   const speedRef = useRef(replaySpeed);

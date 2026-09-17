@@ -1,7 +1,7 @@
 import { useRef, useCallback } from "react";
 import { useTradingStore } from "../../services/store.tsx";
 import { useReplaySession } from "../../services/queries.ts";
-import { accountsApi } from "../../services/api/accounts.ts";
+import { api } from "../../services/api.ts";
 
 function formatTime(epochMs: number): string {
   return new Date(epochMs).toLocaleTimeString("en-US", {
@@ -13,7 +13,8 @@ function formatTime(epochMs: number): string {
 
 export function ReplayScrubber({ accountId }: { accountId: string }) {
   const { replayCursorTimestamp, replaySessionDate } = useTradingStore();
-  const { data } = useReplaySession(accountId, replaySessionDate);
+  const selectedSymbol = useTradingStore((s) => s.selectedSymbol);
+  const { data } = useReplaySession(accountId, replaySessionDate, selectedSymbol);
 
   const barRef = useRef<HTMLDivElement>(null);
 
@@ -36,7 +37,7 @@ export function ReplayScrubber({ accountId }: { accountId: string }) {
       const rect = barRef.current.getBoundingClientRect();
       const pct = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
       const ts = new Date(startMs + pct * rangeMs).toISOString();
-      accountsApi.replaySeek(accountId, sessionDate, ts).catch(() => null);
+      api.replaySeek(accountId, sessionDate, ts).catch(() => null);
     },
     [accountId, sessionDate, startMs, rangeMs],
   );

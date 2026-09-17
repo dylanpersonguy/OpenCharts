@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "../services/api.ts";
 import { useAuthStore } from "../services/store.tsx";
 import { safeStorage } from "../lib/safe-storage.ts";
@@ -45,12 +45,22 @@ function dispatchChartPrefsUpdated(): void {
 
 export function useTraderPreferences() {
   const userId = useAuthStore((s) => s.user?.id);
-  const [prefs, setPrefs] = useState<TraderPrefs>(() => readTraderPrefs(userId));
+  // Tagged by user so a change of account needs no reset effect: preferences
+  // belonging to the previous user stop matching and the local set is read
+  // fresh instead.
+  const [stored, setStored] = useState<{ userId: string | undefined; prefs: TraderPrefs }>(() => ({
+    userId,
+    prefs: readTraderPrefs(userId),
+  }));
+  const prefs = stored.userId === userId ? stored.prefs : readTraderPrefs(userId);
+  const setPrefs = useCallback(
+    (next: TraderPrefs) => setStored({ userId, prefs: next }),
+    [userId],
+  );
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const local = readTraderPrefs(userId);
-    setPrefs(local);
     applyAccentColorFromPrefs(local);
 
     api
@@ -58,7 +68,7 @@ export function useTraderPreferences() {
       .then((serverPrefs: TraderPrefs | null) => {
         if (serverPrefs && typeof serverPrefs === "object") {
           const merged = { ...serverPrefs, ...local };
-          setPrefs(merged);
+          setStored({ userId, prefs: merged });
           writeTraderPrefs(merged, userId);
           applyAccentColorFromPrefs(merged);
         }
@@ -75,7 +85,7 @@ export function useTraderPreferences() {
       dispatchChartPrefsUpdated();
       api.savePreferences(next).catch(() => {});
     },
-    [userId],
+    [userId, setPrefs],
   );
 
   const savePreference = useMemo(

@@ -1121,7 +1121,10 @@ export function ChartPanel({
 
   // Scroll-triggered historical extension — older bars prepended as the user
   // scrolls left past what the initial deep-fetch already loaded.
-  const [historicalExtra, setHistoricalExtra] = useState<Candle[]>([]);
+  const [historicalExtra, setHistoricalExtra] = useState<{ view: string; bars: Candle[] }>({
+    view: `${selectedSymbol}:${timeframe}`,
+    bars: [],
+  });
   const loadMoreRef = useRef<LoadMoreState>({
     loading: false,
     noMoreData: false,
@@ -1152,8 +1155,12 @@ export function ChartPanel({
 
   // OHLCV legend state
   const [legend, setLegend] = useState<OhlcvLegend | null>(null);
-  // Candle countdown state
+  // Candle countdown state. `countdownText` blanks it for timeframes that have
+  // no meaningful countdown (1d, 1w) instead of the timer effect clearing state.
   const [countdown, setCountdown] = useState("");
+  const countdownIntervalMs = TF_INTERVAL_MS[timeframe];
+  const countdownText =
+    countdownIntervalMs && countdownIntervalMs < 86_400_000 ? countdown : "";
   // True once the legend has been restored to the latest bar after the crosshair
   // left the series — prevents re-setting (and re-rendering) on every off-series
   // mouse move while the cursor sits outside the plotted data.
@@ -1168,18 +1175,24 @@ export function ChartPanel({
     [isDark, chartPrefs],
   );
 
-  // Reset historical extension whenever symbol or timeframe changes so stale
-  // out-of-range candles from the previous view are never mixed into new data.
+  // Scroll-loaded history is tagged with the view it belongs to, so a symbol
+  // or timeframe change drops it during render rather than from a reset effect
+  // — stale out-of-range candles can never be mixed into the new view, not even
+  // for one frame. The imperative loader state is reset in the same effect that
+  // rebuilds the loader (below).
   useEffect(() => {
-    setHistoricalExtra([]);
-    loadMoreRef.current = {
-      loading: false,
-      noMoreData: false,
-      lastFetchedBeforeMs: 0,
-      fetchFromMs: 0,
-      emptyWindows: 0,
-    };
-    lastGapRefetchAtRef.current = 0;
+    // Async so the mutation happens after commit rather than in the body.
+    const id = setTimeout(() => {
+      loadMoreRef.current = {
+        loading: false,
+        noMoreData: false,
+        lastFetchedBeforeMs: 0,
+        fetchFromMs: 0,
+        emptyWindows: 0,
+      };
+      lastGapRefetchAtRef.current = 0;
+    }, 0);
+    return () => clearTimeout(id);
   }, [selectedSymbol, timeframe]);
 
   // ── Drawing selection (floating toolbar / settings dialog / object tree) ──
@@ -1298,10 +1311,13 @@ export function ChartPanel({
   // ── Extracted hooks ────────────────────────────────────────
   // Merge scroll-loaded historical extension (older) with the live data (newer).
   // useChartData deduplicates by timestamp, so overlap is safe.
-  const allCandles = useMemo(
-    () => (historicalExtra.length === 0 ? candles : [...historicalExtra, ...candles]),
-    [historicalExtra, candles],
-  );
+  const allCandles = useMemo(() => {
+    // Bars loaded for a different symbol/timeframe are discarded during render,
+    // so a view switch can never mix stale out-of-range candles into the chart.
+    const extra =
+      historicalExtra.view === `${selectedSymbol}:${timeframe}` ? historicalExtra.bars : [];
+    return extra.length === 0 ? candles : [...extra, ...candles];
+  }, [historicalExtra, candles, selectedSymbol, timeframe]);
   const { chartData, volumeData } = useChartData(allCandles, colors);
 
   const {
@@ -1425,12 +1441,11 @@ export function ChartPanel({
   }, [replayTradeEvents, timeframe]);
 
   // ── Candle close countdown timer ───────────────────────────
+  // Daily and weekly bars get no countdown; that is decided when rendering the
+  // legend (see `countdownText`) so the effect never has to blank the state.
   useEffect(() => {
     const intervalMs = TF_INTERVAL_MS[timeframe];
-    if (!intervalMs || intervalMs >= 86_400_000) {
-      setCountdown("");
-      return;
-    }
+    if (!intervalMs || intervalMs >= 86_400_000) return;
     const tick = () => {
       const now = Date.now();
       const currentBucketStart = Math.floor(now / intervalMs) * intervalMs;
@@ -1633,7 +1648,13 @@ export function ChartPanel({
       candleSeriesRef,
       loadMoreRef,
       (bars) => {
-        if (!historyLoadCancelled) setHistoricalExtra((prev) => [...bars, ...prev]);
+        if (historyLoadCancelled) return;
+        const view = `${selectedSymbol}:${timeframeRef.current}`;
+        setHistoricalExtra((prev) =>
+          prev.view === view
+            ? { view, bars: [...bars, ...prev.bars] }
+            : { view, bars: [...bars] },
+        );
       },
     );
     chart.timeScale().subscribeVisibleLogicalRangeChange(handleRangeChange);
@@ -1809,6 +1830,11 @@ export function ChartPanel({
 
     series.setData(chartData);
     volumeSeriesRef.current?.setData(volumeData);
+    // These two refs are bookkeeping for the lightweight-charts instance — the
+    // external system this effect synchronises — not render state. The React
+    // Compiler rule cannot tell the difference, and restructuring the real-time
+    // sync around it would buy nothing but risk.
+    // eslint-disable-next-line react-hooks/immutability
     lastCandleRef.current = chartData[chartData.length - 1] ?? null;
     setLegend(legendFromSeries(chartData, volumeData));
 
@@ -1821,6 +1847,7 @@ export function ChartPanel({
 
     scrollOrFit(chartRef.current, chartData.length);
     lastLoadKeyRef.current = loadKey;
+    // eslint-disable-next-line react-hooks/immutability
     liveCandleTsRef.current = 0;
     replayBufferedLive(buffered, chartData, ctx);
     return scheduleStaleRefetch(chartData, ctx);
@@ -1958,7 +1985,7 @@ export function ChartPanel({
         selectedSymbol={selectedSymbol}
         timeframe={timeframe}
         legend={legend}
-        countdown={countdown}
+        countdown={countdownText}
         tick={tick}
         pipDigits={pipDigits}
         showOhlcLegend={chartPrefs.showOhlcLegend}

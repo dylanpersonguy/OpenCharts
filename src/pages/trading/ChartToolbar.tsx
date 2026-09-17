@@ -6,7 +6,6 @@ import {
   ArrowUpDown,
   ArrowUpRight,
   BarChart3,
-  Bot,
   CalendarDays,
   ChevronDown,
   Circle,
@@ -76,8 +75,7 @@ export interface ChartToolbarProps {
   drawings: DrawingLine[];
   onClearDrawings: () => void;
   rightPanel: string;
-  onRightPanel: (p: "order" | "dom" | "watchlist" | "news" | "ai-trader" | "tv-analysis") => void;
-  aiTraderEnabled?: boolean;
+  onRightPanel: (p: "order" | "dom" | "watchlist" | "news" | "tv-analysis") => void;
   showRightPanel: boolean;
   onToggleRightPanel: () => void;
   tick?: { bid: number; ask: number; timestamp: number };
@@ -127,7 +125,6 @@ export function ChartToolbar({
   onToggleRightPanel,
   tick,
   symbolInfo,
-  aiTraderEnabled,
   isReplaying = false,
   replayAccountId,
   activePlugins = [],
@@ -421,14 +418,6 @@ export function ChartToolbar({
           active={showRightPanel && rightPanel === "tv-analysis"}
           onClick={() => onRightPanel("tv-analysis")}
         />
-        {aiTraderEnabled && (
-          <ToolButton
-            icon={Bot}
-            tooltip="AI Trader"
-            active={showRightPanel && rightPanel === "ai-trader"}
-            onClick={() => onRightPanel("ai-trader")}
-          />
-        )}
         <div className="h-4 border-l border-border mx-1" />
         <button
           onClick={onToggleRightPanel}

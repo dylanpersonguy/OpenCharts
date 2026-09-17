@@ -1,14 +1,17 @@
 import type { DrawingLine } from "../../pages/trading/constants.ts";
 import { safeStorage } from "../../lib/safe-storage.ts";
+import { uid } from "../../lib/uid.ts";
 import type { AccountMetricsResponse } from "../api/auth.ts";
 import type {
   CreateJournalEntryInput,
   JournalEntriesResponse,
+  JournalEntry,
   UpdateJournalEntryInput,
 } from "../api/journal.ts";
 import type { MarketDataCandlesPayload } from "../api/market-data.ts";
 import type { Candle, Order, Position, Symbol } from "../schemas.ts";
 import { getHistory, type HistoryRange } from "./candles.ts";
+import * as replay from "./replay.ts";
 import * as engine from "./engine.ts";
 import { DEMO_SYMBOLS } from "./instruments.ts";
 
@@ -82,6 +85,18 @@ const chartDrawings = {
     return Promise.resolve({ cleared: true });
   },
 };
+
+// ── Trade journal (localStorage) ──────────────────────────
+const JOURNAL_KEY = "oc_journal_entries";
+
+function readJournal(): JournalEntry[] {
+  const parsed = safeStorage.getJSON<JournalEntry[]>(JOURNAL_KEY, []);
+  return Array.isArray(parsed) ? parsed : [];
+}
+
+function writeJournal(entries: JournalEntry[]): void {
+  safeStorage.setJSON(JOURNAL_KEY, entries);
+}
 
 const candlesMeta = (candles: Candle[]): MarketDataCandlesPayload => ({
   // The REST contract carries an explicit ms timestamp beside the second-based
@@ -250,14 +265,57 @@ export const demoApi = {
     Promise.resolve(engine.getClosedPositionsSummary()),
   getFillQuality: (_accountId: string) => Promise.resolve([]),
 
-  // ── Trade journal (not persisted in demo mode) ──
+  // ── Trade journal (persisted to localStorage) ──
   getJournalEntries: (
-    _accountId: string,
-    _opts?: { limit?: number; symbol?: string },
-  ): Promise<JournalEntriesResponse> => Promise.resolve({ entries: [], total: 0 }),
-  createJournalEntry: (_data: CreateJournalEntryInput) => Promise.resolve(null),
-  updateJournalEntry: (_id: string, _data: UpdateJournalEntryInput) => Promise.resolve(null),
-  deleteJournalEntry: (_id: string) => Promise.resolve({ success: true }),
+    accountId: string,
+    opts?: { limit?: number; symbol?: string },
+  ): Promise<JournalEntriesResponse> => {
+    let entries = readJournal().filter((e) => e.accountId === accountId);
+    if (opts?.symbol) entries = entries.filter((e) => e.symbolName === opts.symbol);
+    const total = entries.length;
+    if (opts?.limit != null && opts.limit > 0) entries = entries.slice(0, opts.limit);
+    return Promise.resolve({ entries, total });
+  },
+  createJournalEntry: (data: CreateJournalEntryInput): Promise<JournalEntry> => {
+    const entry: JournalEntry = {
+      id: uid(),
+      accountId: data.accountId,
+      positionId: data.positionId ?? null,
+      symbolName: data.symbolName ?? null,
+      side: data.side ?? null,
+      entryPrice: data.entryPrice ?? null,
+      exitPrice: data.exitPrice ?? null,
+      pnl: data.pnl ?? null,
+      emotion: data.emotion ?? null,
+      setupType: null,
+      rating: data.rating ?? null,
+      tags: data.tags ?? [],
+      notes: data.notes ?? "",
+      createdAt: new Date().toISOString(),
+    };
+    // Newest first, matching the REST contract the panel was built against.
+    writeJournal([entry, ...readJournal()]);
+    return Promise.resolve(entry);
+  },
+  updateJournalEntry: (id: string, data: UpdateJournalEntryInput): Promise<JournalEntry | null> => {
+    const all = readJournal();
+    const idx = all.findIndex((e) => e.id === id);
+    if (idx < 0) return Promise.resolve(null);
+    const updated: JournalEntry = {
+      ...all[idx]!,
+      ...(data.emotion !== undefined ? { emotion: data.emotion } : {}),
+      ...(data.rating !== undefined ? { rating: data.rating } : {}),
+      ...(data.tags !== undefined ? { tags: data.tags } : {}),
+      ...(data.notes !== undefined ? { notes: data.notes } : {}),
+    };
+    all[idx] = updated;
+    writeJournal(all);
+    return Promise.resolve(updated);
+  },
+  deleteJournalEntry: (id: string) => {
+    writeJournal(readJournal().filter((e) => e.id !== id));
+    return Promise.resolve({ success: true });
+  },
 
   // ── Chart persistence ──
   chartDrawings,
@@ -267,11 +325,37 @@ export const demoApi = {
 
   // ── Feature gating / misc (terminal reads these on mount) ──
   getFeatureFlags: (): Promise<Record<string, boolean>> => Promise.resolve({}),
-  isAiTraderEnabled: (): Promise<{ enabled: boolean }> => Promise.resolve({ enabled: false }),
   getAnnouncements: (_page?: number) => Promise.resolve([]),
   getAnnouncementsUnreadCount: () => Promise.resolve(0),
+  // ── Session replay (client-driven; see services/demo/replay.ts) ──
   replayGetSession: (
     _accountId: string,
-    _sessionDate: string,
-  ): Promise<ReplaySessionPayload | null> => Promise.resolve(null),
+    sessionDate: string,
+    symbol?: string,
+  ): Promise<ReplaySessionPayload | null> => replay.getSession(sessionDate, symbol),
+  replayStart: (_accountId: string, sessionDate: string, speed = 1, symbol?: string) =>
+    replay.start(sessionDate, speed, symbol),
+  replayPause: (_accountId: string, _sessionDate: string) => {
+    replay.pause();
+    return Promise.resolve({ success: true });
+  },
+  replayResume: (_accountId: string, _sessionDate: string) => {
+    replay.resume();
+    return Promise.resolve({ success: true });
+  },
+  replayStop: (_accountId: string, _sessionDate: string) => {
+    replay.stop();
+    return Promise.resolve({ success: true });
+  },
+  replaySetSpeed: (_accountId: string, _sessionDate: string, speed: number) =>
+    Promise.resolve(replay.setSpeed(speed)),
+  replaySeek: (_accountId: string, _sessionDate: string, timestamp: string) =>
+    Promise.resolve(replay.seek(timestamp)),
+  replayPatchSession: (
+    _accountId: string,
+    patch: { sessionDate?: string; cursorTimestamp?: number },
+  ) => {
+    replay.patchSession(patch);
+    return Promise.resolve({ success: true });
+  },
 };
