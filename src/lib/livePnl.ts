@@ -15,7 +15,18 @@ export function computeLivePnl(p: Position, tick?: LiveTick): number {
   const livePrice = p.side === "LONG" ? tick.bid : tick.ask;
   const snapPrice = p.currentPrice ?? p.entryPrice;
   const snapDelta = snapPrice - p.entryPrice;
-  if (Math.abs(snapDelta) < 1e-12) return p.unrealizedPnl;
+
+  // A position that has not moved since its snapshot (a fresh fill, or a
+  // flat tick) carries no scale factor to derive — dividing by ~0 would blow
+  // up, and returning the snapshot froze P&L at 0 until the next REST poll.
+  // Fall back to the position's own contract maths, which is exact whenever
+  // the account and the instrument share a currency.
+  if (Math.abs(snapDelta) < 1e-12) {
+    const contractSize = p.contractSize ?? 1;
+    const direction = p.side === "LONG" ? 1 : -1;
+    return (livePrice - p.entryPrice) * p.quantity * contractSize * direction;
+  }
+
   const perPriceUnit = p.unrealizedPnl / snapDelta;
   return perPriceUnit * (livePrice - p.entryPrice);
 }

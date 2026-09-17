@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { toast } from "../../services/toast.ts";
 import { X, Scissors } from "lucide-react";
 import { formatNumber, formatCurrency, formatDate, cn, pnlClass } from "../../lib/utils.ts";
 
@@ -41,7 +42,19 @@ export function PositionsTable({
 
   const handlePartialSubmit = (positionId: string, maxQty: number) => {
     const qty = parseFloat(partialQty);
-    if (!qty || qty <= 0 || qty >= maxQty) return;
+    // Explain the rejection instead of swallowing the click: an out-of-range
+    // value previously looked identical to a successful partial close.
+    if (!Number.isFinite(qty) || qty <= 0) {
+      toast.warning("Invalid Quantity", "Enter a positive quantity to close");
+      return;
+    }
+    if (qty >= maxQty) {
+      toast.warning(
+        "Quantity Too Large",
+        `Enter less than ${maxQty} — use Close to exit the whole position`,
+      );
+      return;
+    }
     onPartialClose?.(positionId, qty);
     setPartialCloseId(null);
     setPartialQty("");

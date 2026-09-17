@@ -344,6 +344,18 @@ export function MarketDataBridge() {
     return unsub;
   }, [queryClient]);
 
+  // Drop any queued work on unmount (HMR, tests, remount) — these timers live
+  // at module scope and would otherwise fire against a stale query client.
+  useEffect(() => {
+    return () => {
+      for (const timer of _invalidateTimers.values()) clearTimeout(timer);
+      _invalidateTimers.clear();
+      for (const timer of _positionBatchTimers.values()) clearTimeout(timer);
+      _positionBatchTimers.clear();
+      _positionBatchBuffers.clear();
+    };
+  }, []);
+
   // Gap-fill on WS reconnect: refetch caches so anything that happened
   // while the socket was down lands instantly.
   useEffect(() => {

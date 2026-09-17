@@ -476,6 +476,12 @@ function EconomicCalendar() {
             </tr>
           </thead>
           <tbody>
+            <tr>
+              <td colSpan={7} className="px-3 py-1.5 bg-secondary/40 text-[10px] text-muted-foreground">
+                <span className="font-medium uppercase tracking-wide">Sample data</span> — switch
+                the TradingView calendar back on for live events.
+              </td>
+            </tr>
             {MOCK_EVENTS.map((ev, i) => (
               <tr key={i} className="hover:bg-secondary/30">
                 <td className="text-muted-foreground">{ev.time}</td>
@@ -513,6 +519,10 @@ function NewsFeed() {
 
   return (
     <div className="divide-y divide-border/30">
+      <div className="px-3 py-1.5 bg-secondary/40 text-[10px] text-muted-foreground flex items-center gap-1.5">
+        <span className="font-medium uppercase tracking-wide">Sample data</span>
+        <span>— OpenCharts ships no news feed; connect a provider to make this live.</span>
+      </div>
       {MOCK_NEWS.map((item, i) => (
         <div key={i} className="px-3 py-2 hover:bg-secondary/30 cursor-pointer">
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground mb-0.5">

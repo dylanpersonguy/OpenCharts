@@ -17,10 +17,26 @@ export interface IndicatorPoint {
   value: number;
 }
 
+/**
+ * Coerce a period to a usable positive integer, or null when it is unusable.
+ *
+ * Without this a zero, negative, fractional or missing period indexed off the
+ * front of the candle array (`candles[-1]!.close`) and threw inside render,
+ * which the ErrorBoundary turns into a blank terminal. Registry entries are
+ * fixed today, but adding an indicator is a documented extension point.
+ */
+function validPeriod(period: number | undefined | null, min = 1): number | null {
+  if (period == null || !Number.isFinite(period)) return null;
+  const floored = Math.floor(period);
+  return floored >= min ? floored : null;
+}
+
 // ── Simple Moving Average ────────────────────────────────────
 export function sma(candles: CandleData[], period: number): IndicatorPoint[] {
   const result: IndicatorPoint[] = [];
-  if (candles.length < period) return result;
+  const p = validPeriod(period);
+  if (p === null || candles.length < p) return result;
+  period = p;
 
   let sum = 0;
   for (let i = 0; i < period; i++) sum += candles[i]!.close;
@@ -37,7 +53,9 @@ export function sma(candles: CandleData[], period: number): IndicatorPoint[] {
 // ── Exponential Moving Average ───────────────────────────────
 export function ema(candles: CandleData[], period: number): IndicatorPoint[] {
   const result: IndicatorPoint[] = [];
-  if (candles.length < period) return result;
+  const p = validPeriod(period);
+  if (p === null || candles.length < p) return result;
+  period = p;
 
   const k = 2 / (period + 1);
 
@@ -54,10 +72,22 @@ export function ema(candles: CandleData[], period: number): IndicatorPoint[] {
   return result;
 }
 
+/**
+ * Wilder's RSI from average gain/loss. A flat stretch has no gains *and* no
+ * losses — that is neutral (50), not maximally overbought, which is what the
+ * bare `avgLoss === 0 → 100` rule used to report.
+ */
+function rsiFrom(avgGain: number, avgLoss: number): number {
+  if (avgLoss === 0) return avgGain === 0 ? 50 : 100;
+  return 100 - 100 / (1 + avgGain / avgLoss);
+}
+
 // ── Relative Strength Index ──────────────────────────────────
 export function rsi(candles: CandleData[], period = 14): IndicatorPoint[] {
   const result: IndicatorPoint[] = [];
-  if (candles.length < period + 1) return result;
+  const p = validPeriod(period);
+  if (p === null || candles.length < p + 1) return result;
+  period = p;
 
   let avgGain = 0;
   let avgLoss = 0;
@@ -71,8 +101,7 @@ export function rsi(candles: CandleData[], period = 14): IndicatorPoint[] {
   avgGain /= period;
   avgLoss /= period;
 
-  const rs0 = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
-  result.push({ time: candles[period]!.time, value: rs0 });
+  result.push({ time: candles[period]!.time, value: rsiFrom(avgGain, avgLoss) });
 
   for (let i = period + 1; i < candles.length; i++) {
     const change = candles[i]!.close - candles[i - 1]!.close;
@@ -80,8 +109,7 @@ export function rsi(candles: CandleData[], period = 14): IndicatorPoint[] {
     const loss = change < 0 ? Math.abs(change) : 0;
     avgGain = (avgGain * (period - 1) + gain) / period;
     avgLoss = (avgLoss * (period - 1) + loss) / period;
-    const rsiVal = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
-    result.push({ time: candles[i]!.time, value: rsiVal });
+    result.push({ time: candles[i]!.time, value: rsiFrom(avgGain, avgLoss) });
   }
   return result;
 }
@@ -99,8 +127,15 @@ export function macd(
   slowPeriod = 26,
   signalPeriod = 9,
 ): MACDResult {
-  const fastEma = ema(candles, fastPeriod);
-  const slowEma = ema(candles, slowPeriod);
+  const fast = validPeriod(fastPeriod);
+  const slow = validPeriod(slowPeriod);
+  const signalLen = validPeriod(signalPeriod);
+  if (fast === null || slow === null || signalLen === null) {
+    return { macd: [], signal: [], histogram: [] };
+  }
+  signalPeriod = signalLen;
+  const fastEma = ema(candles, fast);
+  const slowEma = ema(candles, slow);
 
   // Align by time
   const slowTimes = new Map(slowEma.map((p) => [p.time, p.value]));
@@ -156,7 +191,9 @@ export function bollingerBands(
   const middle: IndicatorPoint[] = [];
   const lower: IndicatorPoint[] = [];
 
-  if (candles.length < period) return { upper, middle, lower };
+  const p = validPeriod(period);
+  if (p === null || candles.length < p) return { upper, middle, lower };
+  period = p;
 
   for (let i = period - 1; i < candles.length; i++) {
     let sum = 0;
@@ -181,7 +218,9 @@ export function bollingerBands(
 // ── Average True Range ───────────────────────────────────────
 export function atr(candles: CandleData[], period = 14): IndicatorPoint[] {
   const result: IndicatorPoint[] = [];
-  if (candles.length < period + 1) return result;
+  const p = validPeriod(period);
+  if (p === null || candles.length < p + 1) return result;
+  period = p;
 
   const trs: number[] = [];
   for (let i = 1; i < candles.length; i++) {
@@ -213,7 +252,11 @@ export interface StochasticResult {
 
 export function stochastic(candles: CandleData[], kPeriod = 14, dPeriod = 3): StochasticResult {
   const kLine: IndicatorPoint[] = [];
-  if (candles.length < kPeriod) return { k: [], d: [] };
+  const kLen = validPeriod(kPeriod);
+  const dLen = validPeriod(dPeriod);
+  if (kLen === null || dLen === null || candles.length < kLen) return { k: [], d: [] };
+  kPeriod = kLen;
+  dPeriod = dLen;
 
   for (let i = kPeriod - 1; i < candles.length; i++) {
     let highest = -Infinity;
@@ -250,10 +293,12 @@ export function vwap(candles: CandleData[]): IndicatorPoint[] {
 
   for (const c of candles) {
     const typicalPrice = (c.high + c.low + c.close) / 3;
-    const vol = c.volume || 1;
+    const vol = Number.isFinite(c.volume) && (c.volume ?? 0) > 0 ? c.volume! : 0;
     cumVolPrice += typicalPrice * vol;
     cumVol += vol;
-    result.push({ time: c.time, value: cumVolPrice / cumVol });
+    // Before any volume has traded VWAP is just the typical price — dividing by
+    // a zero denominator produced NaN and broke the whole series.
+    result.push({ time: c.time, value: cumVol > 0 ? cumVolPrice / cumVol : typicalPrice });
   }
   return result;
 }

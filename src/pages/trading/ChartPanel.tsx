@@ -106,7 +106,14 @@ type LoadMoreState = {
   // Set after an empty-range response so we skip over gaps (e.g. Forex weekends)
   // rather than permanently locking noMoreData on the first empty window.
   fetchFromMs: number;
+  /** Consecutive empty windows; bounded so we stop probing past the dataset. */
+  emptyWindows: number;
 };
+
+// A Forex weekend spans at most ~3 days, so a handful of empty windows in a row
+// means the history really has ended rather than a gap. Without this bound the
+// loader kept walking backwards one window per scroll forever.
+const MAX_EMPTY_WINDOWS = 4;
 
 function getSeriesOldestMs(series: ISeriesApi<"Candlestick">): number {
   const data = series.data();
@@ -143,14 +150,17 @@ function fetchOlderRange(
       if (bars.length === 0) {
         // Empty window — could be a gap (e.g. Forex weekend) rather than true
         // end of history. Shift the fetch boundary back one more window so the
-        // next scroll event tries the range before this gap instead of stopping.
+        // next scroll event tries the range before this gap instead of stopping,
+        // but give up once several windows in a row come back empty.
+        state.emptyWindows += 1;
         const nextToMs = toMs - windowMs;
-        if (nextToMs > 0) {
+        if (nextToMs > 0 && state.emptyWindows < MAX_EMPTY_WINDOWS) {
           state.fetchFromMs = nextToMs;
         } else {
           state.noMoreData = true;
         }
       } else {
+        state.emptyWindows = 0;
         onLoaded(bars as Candle[]);
       }
     })
@@ -1117,6 +1127,7 @@ export function ChartPanel({
     noMoreData: false,
     lastFetchedBeforeMs: 0,
     fetchFromMs: 0,
+    emptyWindows: 0,
   });
   const volumeSeriesRef = useRef<ISeriesApi<"Histogram"> | null>(null);
   const priceLineRef = useRef<IPriceLine[]>([]);
@@ -1166,6 +1177,7 @@ export function ChartPanel({
       noMoreData: false,
       lastFetchedBeforeMs: 0,
       fetchFromMs: 0,
+      emptyWindows: 0,
     };
     lastGapRefetchAtRef.current = 0;
   }, [selectedSymbol, timeframe]);
@@ -1653,6 +1665,7 @@ export function ChartPanel({
       loadMoreRef.current = {
         loading: false,
         noMoreData: false,
+        emptyWindows: 0,
         lastFetchedBeforeMs: 0,
         fetchFromMs: 0,
       };

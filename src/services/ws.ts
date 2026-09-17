@@ -8,7 +8,7 @@
  * consumer (MarketDataBridge, ConnectionIndicator, store, …) had to change.
  */
 import { publish, subscribeChannel, type ChannelHandler } from "./demo/bus.ts";
-import { startDemoFeed } from "./demo/feed.ts";
+import { startDemoFeed, stopDemoFeed } from "./demo/feed.ts";
 
 export type ConnectionState = "connected" | "connecting" | "reconnecting" | "disconnected";
 export type WsHandler = ChannelHandler;
@@ -35,6 +35,9 @@ class DemoWsClient {
   }
 
   disconnect(): void {
+    // Stop the replay too, otherwise prices kept streaming behind a UI that
+    // reports the feed as disconnected.
+    stopDemoFeed();
     this.setState("disconnected");
   }
 

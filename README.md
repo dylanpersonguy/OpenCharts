@@ -167,8 +167,8 @@ marketing copy:
 | Limit / stop orders | **Rest as PENDING** until a tick crosses their trigger, then fill — limits at their price or better, stops at the market that triggered them |
 | Order modify / cancel | Real, and restricted to pending orders |
 | Order validation | Real — quantity, price, side, stop placement, protective-level side and free margin are all checked, with the reason surfaced in a toast |
-| News tab | **Placeholder headlines**, not a live feed |
-| Economic calendar tab & technical-analysis gauge | TradingView embed widgets — real data, loaded from TradingView's CDN |
+| News tab | **Placeholder headlines**, labelled "Sample data" in the UI and attributed to no real outlet |
+| Economic calendar tab & technical-analysis gauge | TradingView embed widgets — real data, loaded from TradingView's CDN. The calendar has a toggle to a **sample** table, labelled as such |
 | Trade journal, trade calculator, AI trader, session replay | **Present in the code but not reachable** — journal and replay are flagged off pending QA, the AI trader is a stub, the calculator is never mounted |
 | Account state (balance, positions, orders) | In-memory — **resets on reload** |
 | Drawings, chart prefs, templates, sound mute | Persisted in `localStorage` |
@@ -349,6 +349,13 @@ attach it where the other primitives are attached in `ChartPanel.tsx`, then add
 it to the plugin list in `ChartToolbar.tsx` so it gets a toggle. The existing
 six plugins are the reference implementations.
 
+### Indicators are pure and covered
+
+`lib/indicators.ts` holds plain functions over candle arrays, with
+[49 tests](src/__tests__/indicators.test.ts) pinning the maths (including the
+degenerate cases: flat series, zero-range windows, zero-volume bars and invalid
+periods). Add an indicator there and the guards apply automatically.
+
 ### Quality gates
 
 All four are expected to pass before a PR, and all four pass on `main`:
@@ -497,6 +504,10 @@ TypeScript 5.7 and Vitest.
   same symbol coexist rather than netting off.
 - **Crypto-only demo symbols** out of the box (the data source is Binance). Wire
   your own adapter for FX, futures or equities.
+- **No news or sentiment integration.** The News tab shows labelled sample
+  items. Components that fabricated market analysis — a sentiment gauge and
+  "STRONG BUY" trade signals derived from a hash of the symbol name — were
+  deleted rather than left for someone to wire up.
 - **Dormant code from the original platform** ships in the repo: session replay
   (`REPLAY_ENABLED = false`), the trade journal (hidden pending QA), the trade
   calculator (never mounted), the AI trader (stubbed), challenge/risk-rule price

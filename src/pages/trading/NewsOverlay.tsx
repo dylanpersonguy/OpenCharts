@@ -1,4 +1,4 @@
-import type { Dispatch, RefObject, SetStateAction } from "react";
+import { useLayoutEffect, useState, type Dispatch, type RefObject, type SetStateAction } from "react";
 import { GripVertical, Newspaper, Settings2, X } from "lucide-react";
 import { useDragOffset } from "../../hooks/useDragOffset.ts";
 import { cn } from "../../lib/utils.ts";
@@ -28,6 +28,27 @@ export function NewsOverlay({
   containerRef,
 }: NewsOverlayProps) {
   const configDrag = useDragOffset();
+
+  // Clamp the popup inside the chart pane. Reading containerRef during render
+  // gave a null ref on the first paint, so the popup was positioned against a
+  // hardcoded 400px pane and could land off-screen; measure after layout and
+  // re-measure when the pane resizes.
+  const [paneWidth, setPaneWidth] = useState(0);
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => setPaneWidth(el.clientWidth);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [containerRef]);
+
+  const POPUP_WIDTH = 288;
+  const popupLeft = newsPopup
+    ? Math.max(8, Math.min(newsPopup.x - 140, Math.max(8, paneWidth - POPUP_WIDTH)))
+    : 0;
+
   return (
     <>
       {/* News event popup */}
@@ -35,10 +56,7 @@ export function NewsOverlay({
         <div
           className="absolute z-30"
           style={{
-            left: Math.min(
-              Math.max(newsPopup.x - 140, 8),
-              (containerRef.current?.clientWidth || 400) - 288,
-            ),
+            left: popupLeft,
             top: Math.max(newsPopup.y - 200, 8),
           }}
           onClick={(e) => e.stopPropagation()}

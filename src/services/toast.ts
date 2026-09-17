@@ -11,9 +11,18 @@ type Listener = (t: ToastPayload) => void;
 const listeners = new Set<Listener>();
 
 export const toast = {
-  /** Fire a toast (Layout's ToastContainer picks it up). */
+  /** Fire a toast (the ToastContainer picks it up). */
   fire(type: ToastPayload["type"], title: string, message: string) {
-    listeners.forEach((fn) => fn({ type, title, message }));
+    // Snapshot: a listener may unsubscribe while handling the event. Isolate
+    // failures so one broken subscriber cannot silence every later toast —
+    // toasts are how the terminal reports rejected orders.
+    for (const fn of [...listeners]) {
+      try {
+        fn({ type, title, message });
+      } catch (err) {
+        console.error("[toast] listener threw", err);
+      }
+    }
   },
 
   success(title: string, message: string) {
