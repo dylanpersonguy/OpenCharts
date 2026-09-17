@@ -35,6 +35,10 @@ export interface ResolvedEntry {
   /** Position tool: stop / target price rows resolved to pixel y. */
   yStop?: number | null;
   yTarget?: number | null;
+  /** Live position tracking: latest series candle coordinates & price. */
+  xCurrent?: number | null;
+  yCurrent?: number | null;
+  currentPrice?: number | null;
   /** Third anchor (parallel channel offset line). */
   x3?: number | null;
   y3?: number | null;

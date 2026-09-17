@@ -324,12 +324,66 @@ export class DrawingToolsManager {
     return { ...two, type: tool as DrawingType };
   }
 
-  // Position tool: entry = first anchor price; the drag's release price becomes
-  // the target and the stop is mirrored 1:1 on the opposite side (draggable
-  // afterwards). Side only drives labelling/colour — risk math uses absolutes.
+  // Position tool: creates TradingView-style Long or Short position with
+  // realistic target, stop, and timeframe width.
   private makePosition(side: "long" | "short", p1: DataPoint, p2: DataPoint): DrawingLine {
     const entry = p1.price;
-    const target = p2.price;
+    const isSingleClick = p1.time === p2.time && Math.abs(p1.price - p2.price) < 1e-6;
+    const defaultBars = 25;
+    const timeSpan = this.intervalSec > 0 ? this.intervalSec * defaultBars : 3600 * defaultBars;
+
+    let time = Math.min(p1.time, p2.time);
+    let time2 = Math.max(p1.time, p2.time);
+    if (time === time2) {
+      time2 = time + timeSpan;
+    }
+
+    let targetPrice: number;
+    let stopPrice: number;
+
+    if (side === "long") {
+      if (isSingleClick) {
+        // Default 2:1 RR with 1% stop loss below entry
+        const risk = entry * 0.01;
+        stopPrice = entry - risk;
+        targetPrice = entry + risk * 2;
+      } else if (p2.price > entry) {
+        // Dragged upward to target
+        targetPrice = p2.price;
+        const reward = targetPrice - entry;
+        stopPrice = entry - reward / 2;
+      } else {
+        // Dragged downward to stop
+        stopPrice = p2.price;
+        const risk = entry - stopPrice;
+        targetPrice = entry + risk * 2;
+      }
+      // Ensure long invariant: targetPrice > entry > stopPrice
+      if (targetPrice <= entry) targetPrice = entry * 1.02;
+      if (stopPrice >= entry) stopPrice = entry * 0.99;
+    } else {
+      // Short position
+      if (isSingleClick) {
+        // Default 2:1 RR with 1% stop loss above entry
+        const risk = entry * 0.01;
+        stopPrice = entry + risk;
+        targetPrice = entry - risk * 2;
+      } else if (p2.price < entry) {
+        // Dragged downward to target
+        targetPrice = p2.price;
+        const reward = entry - targetPrice;
+        stopPrice = entry + reward / 2;
+      } else {
+        // Dragged upward to stop
+        stopPrice = p2.price;
+        const risk = stopPrice - entry;
+        targetPrice = entry - risk * 2;
+      }
+      // Ensure short invariant: stopPrice > entry > targetPrice
+      if (targetPrice >= entry) targetPrice = entry * 0.98;
+      if (stopPrice <= entry) stopPrice = entry * 1.01;
+    }
+
     return {
       id: crypto.randomUUID(),
       type: "position",
@@ -337,10 +391,10 @@ export class DrawingToolsManager {
       color: side === "long" ? "#089981" : "#f23645",
       createdTf: this.timeframe,
       price: entry,
-      time: Math.min(p1.time, p2.time),
-      time2: Math.max(p1.time, p2.time),
-      targetPrice: target,
-      stopPrice: entry - (target - entry),
+      time,
+      time2,
+      targetPrice,
+      stopPrice,
       riskPct: 1,
     };
   }
@@ -994,10 +1048,27 @@ export class DrawingToolsManager {
       this.hoveredId = id;
       this.primitive.setHovered(id);
     }
-    this.applyCursor(hit ? "pointer" : null);
+    if (!hit) {
+      this.applyCursor(null);
+      return;
+    }
+    if (hit.region.kind === "point") {
+      const { timeKey, priceKey } = hit.region;
+      if (timeKey && priceKey) {
+        this.applyCursor("nwse-resize");
+      } else if (timeKey) {
+        this.applyCursor("ew-resize");
+      } else if (priceKey) {
+        this.applyCursor("ns-resize");
+      } else {
+        this.applyCursor("pointer");
+      }
+    } else {
+      this.applyCursor("grab");
+    }
   }
 
-  private applyCursor(interactionCursor: "pointer" | "grabbing" | null): void {
+  private applyCursor(interactionCursor: string | null): void {
     if (interactionCursor) {
       this.container.style.cursor = interactionCursor;
       return;

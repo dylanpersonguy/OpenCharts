@@ -298,7 +298,7 @@ function renderText(scope: BitmapCoordinatesRenderingScope, e: ResolvedEntry): v
   ctx.restore();
 }
 
-// ── Position tool (long/short risk-reward) ───────────────────────────────────
+// ── Position tool (long/short risk-reward TradingView style) ────────────────
 
 const POS_GREEN = "#089981";
 const POS_RED = "#f23645";
@@ -312,15 +312,148 @@ function renderPosition(
   if (x1 === null || x2 === null || y1 === null || yStop == null || yTarget == null) return;
   const xa = Math.min(x1, x2);
   const xb = Math.max(x1, x2);
+  const width = xb - xa;
+  if (width < 2) return;
+
+  // Target Zone (Profit) & Stop Zone (Loss)
   posZone(scope, xa, xb, y1, yTarget, POS_GREEN);
   posZone(scope, xa, xb, y1, yStop, POS_RED);
-  strokeLine(scope, toBitmap(scope, xa, y1), toBitmap(scope, xb, y1), "#d1d4dc", 1.5, [5, 3]);
-  if (showHandles(e)) renderPositionHandles(scope, e, xa, xb, y1);
-  const lines = positionReadout(e.d, info);
-  if (lines.length > 0) {
-    const at = toBitmap(scope, xb + 8, y1);
-    drawLabelBox(scope, at.x, at.y, lines, e.d.color);
+
+  // High-contrast Entry Separator Line
+  strokeLine(scope, toBitmap(scope, xa, y1), toBitmap(scope, xb, y1), "#787b86", 1.5);
+
+  // Interactive Live Position Tracker (Entry → Current Price)
+  renderLivePositionTracker(scope, e, info, xa, xb, y1);
+
+  // TradingView badges and handles only visible when hovered, selected, or previewing
+  if (showHandles(e)) {
+    renderPositionBadges(scope, e, info, xa, xb, y1, yTarget, yStop);
+    renderPositionHandles(scope, e, xa, xb, y1);
   }
+}
+
+function renderLivePositionTracker(
+  scope: BitmapCoordinatesRenderingScope,
+  e: ResolvedEntry,
+  info: DrawCtxInfo,
+  xa: number,
+  xb: number,
+  y1: number,
+): void {
+  if (
+    e.currentPrice == null ||
+    e.yCurrent == null ||
+    e.xCurrent == null ||
+    !Number.isFinite(e.currentPrice)
+  ) {
+    return;
+  }
+
+  const isLong = e.d.side !== "short";
+  const inProfit = isLong ? e.currentPrice >= e.d.price : e.currentPrice <= e.d.price;
+  const trackColor = inProfit ? POS_GREEN : POS_RED;
+
+  const xEntry = xa;
+  const xTrack = Math.max(xEntry, e.xCurrent);
+  const yEntry = y1;
+  const yCurr = e.yCurrent;
+
+  // 1. Highlight area between entry and current price
+  posZone(scope, xEntry, xTrack, yEntry, yCurr, trackColor, 0.28);
+
+  // 2. Dotted horizontal reference line extending from entry across the candles
+  const xSpanEnd = Math.max(xb, xTrack);
+  strokeLine(scope, toBitmap(scope, xEntry, yEntry), toBitmap(scope, xSpanEnd, yEntry), "#d1d4dc", 1.2, [4, 4]);
+
+  // 3. Dotted vertical crosshair / guide line aligned with current candle/price
+  strokeLine(scope, toBitmap(scope, xTrack, yEntry), toBitmap(scope, xTrack, yCurr), trackColor, 1.5, [3, 3]);
+
+  // 4. Glowing marker dot at current price
+  const currPt = toBitmap(scope, xTrack, yCurr);
+  const ctx = scope.context;
+  const hpr = scope.horizontalPixelRatio;
+  const vpr = scope.verticalPixelRatio;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(currPt.x, currPt.y, 6.5 * hpr, 0, Math.PI * 2);
+  ctx.fillStyle = hexToRgba(trackColor, 0.4);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(currPt.x, currPt.y, 3.5 * hpr, 0, Math.PI * 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill();
+  ctx.lineWidth = 1.5 * hpr;
+  ctx.strokeStyle = trackColor;
+  ctx.stroke();
+  ctx.restore();
+
+  // 5. Live Tracking P&L readout badge
+  const diff = Math.abs(e.currentPrice - e.d.price);
+  const pct = e.d.price !== 0 ? ((e.currentPrice - e.d.price) / e.d.price) * (isLong ? 100 : -100) : 0;
+  const sign = pct >= 0 ? "+" : "";
+
+  const trackerLines = [
+    `Live ${info.priceFormat(e.currentPrice)} (${sign}${pct.toFixed(2)}%)`,
+  ];
+
+  if (e.d.riskPct && info.accountEquity > 0 && e.d.stopPrice != null) {
+    const risk = Math.abs(e.d.price - e.d.stopPrice);
+    const riskAmt = (info.accountEquity * e.d.riskPct) / 100;
+    const qty = riskAmt / (risk || 1);
+    const pnlUsd = (e.currentPrice - e.d.price) * (isLong ? 1 : -1) * qty;
+    const pnlSign = pnlUsd >= 0 ? "+" : "";
+    trackerLines.push(`P&L: ${pnlSign}$${pnlUsd.toFixed(2)}`);
+  }
+
+  drawLiveTrackerBadge(scope, xTrack + 10, yCurr, trackerLines, trackColor);
+}
+
+function drawLiveTrackerBadge(
+  scope: BitmapCoordinatesRenderingScope,
+  x: number,
+  y: number,
+  lines: string[],
+  accentColor: string,
+): void {
+  const ctx = scope.context;
+  const hpr = scope.horizontalPixelRatio;
+  const vpr = scope.verticalPixelRatio;
+
+  ctx.save();
+  ctx.font = `600 ${Math.round(10 * vpr)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+  const lineH = 13 * vpr;
+  const padX = 6 * hpr;
+  const padY = 4 * vpr;
+
+  const maxTextW = Math.max(...lines.map((l) => ctx.measureText(l).width));
+  const boxW = maxTextW + padX * 2;
+  const boxH = lines.length * lineH + padY * 2;
+
+  let bx = Math.round(x * hpr);
+  let by = Math.round(y * vpr - boxH / 2);
+
+  if (bx + boxW > scope.bitmapSize.width - 4 * hpr) {
+    bx = Math.round(x * hpr - boxW - 20 * hpr);
+  }
+  by = Math.min(Math.max(4 * vpr, by), scope.bitmapSize.height - boxH - 4 * vpr);
+
+  ctx.fillStyle = "rgba(18, 22, 34, 0.92)";
+  ctx.beginPath();
+  ctx.roundRect(bx, by, boxW, boxH, 3 * hpr);
+  ctx.fill();
+
+  ctx.strokeStyle = hexToRgba(accentColor, 0.85);
+  ctx.lineWidth = 1 * vpr;
+  ctx.stroke();
+
+  ctx.textBaseline = "top";
+  lines.forEach((l, i) => {
+    ctx.fillStyle = i === 0 ? accentColor : "#e0e3ea";
+    ctx.fillText(l, bx + padX, by + padY + i * lineH);
+  });
+  ctx.restore();
 }
 
 function posZone(
@@ -330,16 +463,115 @@ function posZone(
   yFrom: number,
   yTo: number,
   color: string,
+  alpha = 0.2,
 ): void {
   const ctx = scope.context;
   const a = toBitmap(scope, xa, Math.min(yFrom, yTo));
   const b = toBitmap(scope, xb, Math.max(yFrom, yTo));
+  const h = Math.max(1, b.y - a.y);
+  const w = Math.max(1, b.x - a.x);
+
   ctx.save();
-  ctx.fillStyle = hexToRgba(color, 0.12);
-  ctx.fillRect(a.x, a.y, b.x - a.x, b.y - a.y);
-  ctx.strokeStyle = hexToRgba(color, 0.6);
+  ctx.fillStyle = hexToRgba(color, alpha);
+  ctx.fillRect(a.x, a.y, w, h);
+  ctx.strokeStyle = hexToRgba(color, 0.85);
   ctx.lineWidth = scope.verticalPixelRatio;
-  ctx.strokeRect(a.x, a.y, b.x - a.x, b.y - a.y);
+  ctx.strokeRect(a.x, a.y, w, h);
+  ctx.restore();
+}
+
+function renderPositionBadges(
+  scope: BitmapCoordinatesRenderingScope,
+  e: ResolvedEntry,
+  info: DrawCtxInfo,
+  xa: number,
+  xb: number,
+  y1: number,
+  yTarget: number,
+  yStop: number,
+): void {
+  const d = e.d;
+  if (d.stopPrice == null || d.targetPrice == null) return;
+
+  const reward = Math.abs(d.targetPrice - d.price);
+  const risk = Math.abs(d.price - d.stopPrice);
+  const rr = risk > 0 ? reward / risk : 0;
+  const targetDiffPct = d.price !== 0 ? (reward / d.price) * 100 : 0;
+  const stopDiffPct = d.price !== 0 ? (risk / d.price) * 100 : 0;
+
+  // Target card lines
+  const targetLines = [
+    `Target: ${info.priceFormat(d.targetPrice)} (+${info.priceFormat(reward)}, +${targetDiffPct.toFixed(2)}%)`,
+    `Risk/Reward Ratio: ${rr.toFixed(2)}`,
+  ];
+
+  // Stop card lines
+  const stopLines = [
+    `Stop: ${info.priceFormat(d.stopPrice)} (-${info.priceFormat(risk)}, -${stopDiffPct.toFixed(2)}%)`,
+  ];
+  if (info.accountEquity > 0 && risk > 0) {
+    const riskAmt = (info.accountEquity * (d.riskPct ?? 1)) / 100;
+    const qty = riskAmt / risk;
+    stopLines.push(`Risk $${riskAmt.toFixed(0)} · Qty ${qty >= 100 ? qty.toFixed(0) : qty.toFixed(2)}`);
+  }
+
+  const xm = (xa + xb) / 2;
+  const isLong = d.side !== "short";
+
+  // Position target badge at the top edge of top zone, and stop badge at bottom edge of bottom zone
+  const targetEdgeY = isLong ? yTarget : yTarget;
+  const stopEdgeY = isLong ? yStop : yStop;
+
+  drawTvBadge(scope, xm, targetEdgeY, targetLines, POS_GREEN, isLong ? "top" : "bottom");
+  drawTvBadge(scope, xm, stopEdgeY, stopLines, POS_RED, isLong ? "bottom" : "top");
+}
+
+function drawTvBadge(
+  scope: BitmapCoordinatesRenderingScope,
+  centerX: number,
+  edgeY: number,
+  lines: string[],
+  accentColor: string,
+  align: "top" | "bottom" = "top",
+): void {
+  const ctx = scope.context;
+  const hpr = scope.horizontalPixelRatio;
+  const vpr = scope.verticalPixelRatio;
+
+  ctx.save();
+  ctx.font = `600 ${Math.round(11 * vpr)}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+  const lineH = 15 * vpr;
+  const padX = 8 * hpr;
+  const padY = 5 * vpr;
+
+  const maxTextW = Math.max(...lines.map((l) => ctx.measureText(l).width));
+  const boxW = maxTextW + padX * 2;
+  const boxH = lines.length * lineH + padY * 2;
+
+  const bx = Math.round(centerX * hpr - boxW / 2);
+  let by = align === "top" ? Math.round(edgeY * vpr) : Math.round(edgeY * vpr - boxH);
+
+  // Clamp within viewport
+  const clampedX = Math.min(Math.max(4 * hpr, bx), scope.bitmapSize.width - boxW - 4 * hpr);
+  const clampedY = Math.min(Math.max(4 * vpr, by), scope.bitmapSize.height - boxH - 4 * vpr);
+
+  // Badge background
+  ctx.fillStyle = "rgba(18, 22, 34, 0.90)";
+  ctx.beginPath();
+  ctx.roundRect(clampedX, clampedY, boxW, boxH, 4 * hpr);
+  ctx.fill();
+
+  // Subtle border with accent
+  ctx.strokeStyle = hexToRgba(accentColor, 0.7);
+  ctx.lineWidth = 1 * vpr;
+  ctx.stroke();
+
+  // Text rendering
+  ctx.textBaseline = "top";
+  lines.forEach((l, i) => {
+    ctx.fillStyle = i === 0 ? "#ffffff" : "#b2b5be";
+    ctx.fillText(l, clampedX + padX, clampedY + padY + i * lineH);
+  });
   ctx.restore();
 }
 
@@ -351,38 +583,29 @@ function renderPositionHandles(
   y1: number,
 ): void {
   const xm = (xa + xb) / 2;
-  drawHandle(scope, toBitmap(scope, xm, y1), e.d.color);
-  if (e.yTarget != null) drawHandle(scope, toBitmap(scope, xm, e.yTarget), e.d.color);
-  if (e.yStop != null) drawHandle(scope, toBitmap(scope, xm, e.yStop), e.d.color);
-  drawHandle(scope, toBitmap(scope, xb, y1), e.d.color);
-}
+  const color = e.d.side === "short" ? POS_RED : POS_GREEN;
 
-function positionReadout(d: DrawingLine, info: DrawCtxInfo): string[] {
-  if (d.stopPrice == null || d.targetPrice == null) return [];
-  const reward = Math.abs(d.targetPrice - d.price);
-  const risk = Math.abs(d.price - d.stopPrice);
-  const rr = risk > 0 ? reward / risk : 0;
-  const side = d.side === "short" ? "Short" : "Long";
-  const lines = [
-    `${side}  RR ${rr.toFixed(2)}`,
-    `T ${info.priceFormat(d.targetPrice)}  ${signPct(d.targetPrice, d.price)}`,
-    `S ${info.priceFormat(d.stopPrice)}  ${signPct(d.stopPrice, d.price)}`,
-  ];
-  if (info.accountEquity > 0 && risk > 0) {
-    const riskAmt = (info.accountEquity * (d.riskPct ?? 1)) / 100;
-    const qty = riskAmt / risk;
-    lines.push(`Risk $${riskAmt.toFixed(0)} · Qty ${qty >= 100 ? qty.toFixed(0) : qty.toFixed(2)}`);
+  // Center handles
+  drawHandle(scope, toBitmap(scope, xm, y1), "#ffffff"); // Entry center
+  if (e.yTarget != null) drawHandle(scope, toBitmap(scope, xm, e.yTarget), POS_GREEN); // Target center
+  if (e.yStop != null) drawHandle(scope, toBitmap(scope, xm, e.yStop), POS_RED); // Stop center
+
+  // Side width handles (left & right on entry line)
+  drawHandle(scope, toBitmap(scope, xa, y1), "#ffffff");
+  drawHandle(scope, toBitmap(scope, xb, y1), "#ffffff");
+
+  // Corner handles
+  if (e.yTarget != null) {
+    drawHandle(scope, toBitmap(scope, xa, e.yTarget), POS_GREEN);
+    drawHandle(scope, toBitmap(scope, xb, e.yTarget), POS_GREEN);
   }
-  return lines;
+  if (e.yStop != null) {
+    drawHandle(scope, toBitmap(scope, xa, e.yStop), POS_RED);
+    drawHandle(scope, toBitmap(scope, xb, e.yStop), POS_RED);
+  }
 }
 
-function signPct(v: number, entry: number): string {
-  if (entry === 0) return "0%";
-  const p = ((v - entry) / entry) * 100;
-  return `${p >= 0 ? "+" : ""}${p.toFixed(2)}%`;
-}
-
-// Reusable dark readout box (position stats, text labels).
+// Reusable dark readout box (stats, text labels).
 function drawLabelBox(
   scope: BitmapCoordinatesRenderingScope,
   x: number,

@@ -670,7 +670,7 @@ function scheduleStaleRefetch(
 
 // ── Position / order overlay helpers ─────────────────────────────────────────
 
-type SlTpField = "takeProfit" | "stopLoss";
+type SlTpField = "takeProfit" | "stopLoss" | "entry";
 interface SlTpEntry {
   line: IPriceLine;
   price: number;
@@ -737,16 +737,25 @@ function addPositionOverlay(
   map: SlTpMap,
 ): void {
   if (pos.symbolName !== opts.symbol || !Number.isFinite(pos.entryPrice)) return;
-  out.push(
-    series.createPriceLine({
-      price: pos.entryPrice,
-      color: pos.side === "LONG" ? opts.colors.up : opts.colors.down,
-      lineWidth: 1,
-      lineStyle: LineStyle.Dotted,
-      axisLabelVisible: true,
-      title: `${pos.side === "LONG" ? "buy" : "sell"} ${pos.quantity.toFixed(2)}`,
-    }),
-  );
+  const entryLine = series.createPriceLine({
+    price: pos.entryPrice,
+    color: pos.side === "LONG" ? opts.colors.up : opts.colors.down,
+    lineWidth: 1.5,
+    lineStyle: LineStyle.Dotted,
+    axisLabelVisible: true,
+    title: `${pos.side === "LONG" ? "BUY" : "SELL"} ${pos.quantity.toFixed(2)} (Drag to set SL/TP)`,
+  });
+  out.push(entryLine);
+  map.set(`${pos.id}:entry`, {
+    line: entryLine,
+    price: pos.entryPrice,
+    positionId: pos.id,
+    field: "entry",
+    side: pos.side,
+    entryPrice: pos.entryPrice,
+    quantity: pos.quantity,
+  });
+
   const direction = pos.side === "LONG" ? 1 : -1;
   const pnlAt = (target: number) =>
     parseFloat(

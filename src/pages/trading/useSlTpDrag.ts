@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type RefObject } from "react";
-import type { IChartApi, ISeriesApi, IPriceLine } from "lightweight-charts";
+import { type IChartApi, type ISeriesApi, type IPriceLine, LineStyle } from "lightweight-charts";
 import type { DrawingTool } from "./constants.ts";
 
 // ── Types ────────────────────────────────────────────────────
@@ -7,13 +7,15 @@ import type { DrawingTool } from "./constants.ts";
 export interface DragPriceState {
   price: number;
   y: number;
-  field: "TP" | "SL";
+  field: "TP" | "SL" | "Entry";
   pnlUsd: number;
 }
 
+export type SlTpField = "takeProfit" | "stopLoss" | "entry";
+
 export interface SlTpLineEntry {
   positionId: string;
-  field: "takeProfit" | "stopLoss";
+  field: SlTpField;
   line: IPriceLine;
   price: number;
   entryPrice: number;
@@ -43,14 +45,18 @@ export function useSlTpDrag(
 ): DragPriceState | null {
   const dragRef = useRef<{
     active: boolean;
+    isEntryDrag: boolean;
     positionId: string;
-    field: "takeProfit" | "stopLoss";
-    priceLine: IPriceLine;
+    field: SlTpField;
+    targetField?: "takeProfit" | "stopLoss";
+    priceLine?: IPriceLine;
     startPrice: number;
     entryPrice: number;
     quantity: number;
     side: string;
   } | null>(null);
+
+  const previewLineRef = useRef<IPriceLine | null>(null);
   const [dragPrice, setDragPrice] = useState<DragPriceState | null>(null);
 
   const onModifyPositionRef = useRef(onModifyPosition);
@@ -66,7 +72,7 @@ export function useSlTpDrag(
     const series = candleSeriesRef.current;
     if (!container || !chart || !series) return;
 
-    const SNAP_PX = 8;
+    const SNAP_PX = 10;
 
     const yToPrice = (clientY: number): number | null => {
       const rect = container.getBoundingClientRect();
@@ -100,16 +106,22 @@ export function useSlTpDrag(
 
       e.preventDefault();
       e.stopPropagation();
+
+      const isEntry = nearest.entry.field === "entry";
+
       dragRef.current = {
         active: true,
+        isEntryDrag: isEntry,
         positionId: nearest.entry.positionId,
         field: nearest.entry.field,
-        priceLine: nearest.entry.line,
+        targetField: isEntry ? undefined : (nearest.entry.field as "takeProfit" | "stopLoss"),
+        priceLine: isEntry ? undefined : nearest.entry.line,
         startPrice: nearest.entry.price,
         entryPrice: nearest.entry.entryPrice,
         quantity: nearest.entry.quantity,
         side: nearest.entry.side,
       };
+
       chart.applyOptions({
         handleScroll: {
           mouseWheel: true,
@@ -128,27 +140,63 @@ export function useSlTpDrag(
         const price = yToPrice(e.clientY);
         if (price !== null) {
           const rounded = parseFloat(price.toFixed(pipDigitsRef.current));
-          drag.priceLine.applyOptions({ price: rounded });
-
           const cSize = symbolInfoRef.current?.contractSize || 100000;
           const dir = drag.side === "LONG" ? 1 : -1;
           const pnlUsd = parseFloat(
             ((rounded - drag.entryPrice) * dir * drag.quantity * cSize).toFixed(2),
           );
 
-          const label = drag.field === "takeProfit" ? "TP" : "SL";
-          const sign = pnlUsd >= 0 ? "+" : "";
-          drag.priceLine.applyOptions({
-            title: `${label}  ${sign}$${pnlUsd.toFixed(2)}`,
-          });
+          if (drag.isEntryDrag) {
+            // Determine if dragging towards Profit (TP) or Loss (SL)
+            const isProfit = drag.side === "LONG" ? rounded >= drag.entryPrice : rounded <= drag.entryPrice;
+            const targetField = isProfit ? "takeProfit" : "stopLoss";
+            drag.targetField = targetField;
 
-          const rect = container.getBoundingClientRect();
-          setDragPrice({
-            price: rounded,
-            y: e.clientY - rect.top,
-            field: drag.field === "takeProfit" ? "TP" : "SL",
-            pnlUsd,
-          });
+            const label = targetField === "takeProfit" ? "TP" : "SL";
+            const sign = pnlUsd >= 0 ? "+" : "";
+            const color = targetField === "takeProfit" ? "#0ecb81" : "#f6465d";
+
+            if (!previewLineRef.current) {
+              previewLineRef.current = series.createPriceLine({
+                price: rounded,
+                title: `${label}  ${sign}$${pnlUsd.toFixed(2)}`,
+                color,
+                lineWidth: 2,
+                lineStyle: LineStyle.Dashed,
+                axisLabelVisible: true,
+              });
+            } else {
+              previewLineRef.current.applyOptions({
+                price: rounded,
+                title: `${label}  ${sign}$${pnlUsd.toFixed(2)}`,
+                color,
+              });
+            }
+
+            const rect = container.getBoundingClientRect();
+            setDragPrice({
+              price: rounded,
+              y: e.clientY - rect.top,
+              field: label,
+              pnlUsd,
+            });
+          } else if (drag.priceLine) {
+            // Existing SL or TP line drag
+            drag.priceLine.applyOptions({ price: rounded });
+            const label = drag.field === "takeProfit" ? "TP" : "SL";
+            const sign = pnlUsd >= 0 ? "+" : "";
+            drag.priceLine.applyOptions({
+              title: `${label}  ${sign}$${pnlUsd.toFixed(2)}`,
+            });
+
+            const rect = container.getBoundingClientRect();
+            setDragPrice({
+              price: rounded,
+              y: e.clientY - rect.top,
+              field: label,
+              pnlUsd,
+            });
+          }
         }
         return;
       }
@@ -166,6 +214,15 @@ export function useSlTpDrag(
       if (!drag?.active) return;
 
       const newPrice = yToPrice(e.clientY);
+      if (previewLineRef.current) {
+        try {
+          series.removePriceLine(previewLineRef.current);
+        } catch {
+          /* ignore */
+        }
+        previewLineRef.current = null;
+      }
+
       dragRef.current = null;
       setDragPrice(null);
 
@@ -182,9 +239,18 @@ export function useSlTpDrag(
       if (newPrice === null) return;
       const rounded = parseFloat(newPrice.toFixed(pipDigitsRef.current));
 
+      if (drag.isEntryDrag) {
+        if (Math.abs(rounded - drag.entryPrice) >= Math.pow(10, -pipDigitsRef.current) && drag.targetField) {
+          onModifyPositionRef.current?.(drag.positionId, {
+            [drag.targetField]: rounded,
+          });
+        }
+        return;
+      }
+
       if (Math.abs(rounded - drag.startPrice) < Math.pow(10, -pipDigitsRef.current)) return;
 
-      if (onModifyPositionRef.current) {
+      if (onModifyPositionRef.current && (drag.field === "takeProfit" || drag.field === "stopLoss")) {
         onModifyPositionRef.current(drag.positionId, {
           [drag.field]: rounded,
         });
@@ -197,12 +263,20 @@ export function useSlTpDrag(
     window.addEventListener("mouseup", handleMouseUp);
 
     return () => {
+      if (previewLineRef.current) {
+        try {
+          series.removePriceLine(previewLineRef.current);
+        } catch {
+          /* ignore */
+        }
+        previewLineRef.current = null;
+      }
       container.removeEventListener("mousedown", handleMouseDown, true);
       container.removeEventListener("mousemove", handleMouseMove);
       container.removeEventListener("mouseup", handleMouseUp);
       window.removeEventListener("mouseup", handleMouseUp);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- chart/series/container live in refs; chartEpoch re-binds after every chart (re)create so the listeners never capture a destroyed instance
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawingTool, chartEpoch]);
 
   return dragPrice;

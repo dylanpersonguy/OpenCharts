@@ -140,6 +140,15 @@ export function resolveEntry(d: DrawingLine, ctx: ResolveCtx, state: EntryState)
   if (d.type === "position") {
     entry.yStop = d.stopPrice != null ? ctx.series.priceToCoordinate(d.stopPrice) : null;
     entry.yTarget = d.targetPrice != null ? ctx.series.priceToCoordinate(d.targetPrice) : null;
+    if (ctx.data.length > 0) {
+      const last = ctx.data[ctx.data.length - 1] as { time: Time; close?: number; value?: number };
+      const close = typeof last.close === "number" ? last.close : (last as unknown as { close?: number })?.close;
+      if (typeof close === "number" && Number.isFinite(close)) {
+        entry.currentPrice = close;
+        entry.yCurrent = ctx.series.priceToCoordinate(close);
+        entry.xCurrent = timeToX(ctx, last.time as number);
+      }
+    }
   }
   if (d.type === "channel") {
     entry.x3 = d.time3 != null ? timeToX(ctx, d.time3) : null;
