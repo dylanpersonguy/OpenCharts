@@ -150,6 +150,36 @@ toolbar and removable individually or in bulk from the chart context menu.
 
 ## Quick start
 
+### Use it in your app
+
+```bash
+npm install @dylanpersonguy/opencharts
+```
+
+```tsx
+import { OpenChartsProvider, Terminal } from "@dylanpersonguy/opencharts";
+import { createDemoAdapter } from "@dylanpersonguy/opencharts/demo";
+import "@dylanpersonguy/opencharts/style.css";
+
+export function TradingScreen() {
+  return (
+    <div style={{ height: 640 }}>
+      <OpenChartsProvider adapter={createDemoAdapter()}>
+        <Terminal />
+      </OpenChartsProvider>
+    </div>
+  );
+}
+```
+
+That runs the full terminal against the bundled demo data — nothing else to
+configure. Swap `createDemoAdapter()` for your own adapter to point it at a real
+backend ([Integrating OpenCharts](#integrating-opencharts)). React 18.2+ is the
+only peer dependency; the stylesheet is precompiled, so your app does not need
+Tailwind.
+
+### Run this repository
+
 > Requires **Node 20+**.
 
 ```bash
@@ -306,7 +336,6 @@ src/
 │  │  └─ session-breaks/ session-highlighting/ bands-indicator/
 │  ├─ indicators.ts         # SMA/EMA/RSI/MACD/BOLL/ATR/STOCH/VWAP
 │  ├─ livePnl.ts            # live P&L / price math shared by the tables
-│  ├─ posthog.ts            # optional analytics (no-op without an API key)
 │  └─ utils.ts
 ├─ components/              # dialogs, mobile panel, TradingView embeds, ui primitives
 ├─ hooks/                   # drawings, chart prefs, trader prefs, trade sound…
@@ -462,7 +491,7 @@ hand it to the provider, and the whole terminal — chart, order ticket, positio
 replay — runs against your backend.
 
 ```tsx
-import { OpenChartsProvider, type OpenChartsAdapter } from "opencharts/adapter";
+import { OpenChartsProvider, Terminal, type OpenChartsAdapter } from "@dylanpersonguy/opencharts";
 
 const adapter: OpenChartsAdapter = {
   name: "my-broker",
@@ -478,7 +507,7 @@ const adapter: OpenChartsAdapter = {
 };
 
 <OpenChartsProvider adapter={adapter}>
-  <TradingPage />
+  <Terminal />
 </OpenChartsProvider>;
 ```
 
@@ -518,7 +547,7 @@ A conformance suite ships with the project and checks the things that fail
 quietly:
 
 ```ts
-import { runAdapterConformance } from "opencharts/adapter/conformance";
+import { runAdapterConformance } from "@dylanpersonguy/opencharts/conformance";
 
 runAdapterConformance("my-broker", () => createMyAdapter(), { symbol: "BTCUSD" });
 ```
@@ -559,6 +588,47 @@ account, drawings, positions — plus the confirm and modify dialogs, so every
 composition gets them. Layout is entirely yours. A full example is in
 [`examples/embedded-chart/`](examples/embedded-chart/).
 
+### What the provider handles for you
+
+`<OpenChartsProvider>` is the whole runtime. It installs the adapter, opens the
+market-data stream, loads instruments (and accounts, when the adapter trades),
+and supplies everything the panels depend on — a query cache, tooltips,
+notifications and an error boundary. If the adapter fails to load, it shows the
+error with a retry button instead of a blank screen.
+
+| Prop | Default | |
+| --- | --- | --- |
+| `adapter` | — | Your `OpenChartsAdapter` (required) |
+| `fallback` | "Loading OpenCharts…" | Shown while instruments and accounts load |
+| `queryClient` | its own | Pass yours to share a TanStack Query cache; by default the terminal's stays separate from the host's |
+| `showNotifications` | `true` | Render the built-in notifications |
+| `className` / `style` | — | Applied to the scoping element |
+
+### It will not touch your page
+
+Every rule in `style.css` — Tailwind's reset, utilities and the theme variables —
+is scoped under the `.opencharts` element the provider renders. Your page keeps
+its own fonts, spacing, form controls, tables and scrolling, and a
+[shadcn/ui](https://ui.shadcn.com) theme using the same variable names
+(`--background`, `--primary`, …) is left alone. The build fails if any selector
+escapes the scope.
+
+The terminal fills its container, so **give the parent a height**. For the light
+theme, add the `light` class to `<html>` or to the scoping element.
+
+### Route notifications into your own UI
+
+Order fills, rejections and their reasons, and validation warnings come
+through one stream:
+
+```tsx
+import { onNotification } from "@dylanpersonguy/opencharts";
+
+const stop = onNotification((n) => myToaster.show(n.title, n.message, n.type));
+```
+
+Pair it with `showNotifications={false}` to replace the built-in toasts.
+
 ### A worked example
 
 [`examples/binance-adapter/`](examples/binance-adapter/) is a complete live
@@ -588,9 +658,11 @@ Everything works with no configuration. Optional environment variables:
 
 | Variable | Effect |
 | --- | --- |
-| `VITE_POSTHOG_API_KEY` | Enables PostHog analytics. **Unset (the default) means analytics are never initialized and nothing leaves the browser.** |
-| `VITE_POSTHOG_HOST` | PostHog host, defaults to `https://us.i.posthog.com` |
+| `VITE_ADAPTER` | Set to `binance` to run the demo against live Binance prices |
 | `VITE_API_URL` | Base URL used by the legacy HTTP client in `src/services/api/` |
+
+**OpenCharts ships no analytics or telemetry.** Nothing leaves the browser
+except the requests your adapter makes, and the TradingView embeds below.
 
 Note that the Calendar tab and the technical-analysis gauge load TradingView's
 embed scripts from TradingView's CDN — they need no key, but they are third-party
@@ -604,6 +676,8 @@ network requests. Drop those components if you want a strictly offline build.
 | `npm run dev:ci` | Dev server bound to `0.0.0.0:5173` |
 | `npm run build` | Production build to `dist/` |
 | `npm run check:size` | Fail if the first-load payload exceeds its budget (run after `build`) |
+| `npm run build:lib` | Build the npm package into `dist-lib/` (fails if any CSS escapes the scope) |
+| `npm run check:package` | Verify the package matches its `exports` (run after `build:lib`) |
 | `npm run preview` | Preview the production build |
 | `npm run typecheck` | Type-check the project with `tsc` |
 | `npm run test` | Run the Vitest unit tests |
@@ -620,11 +694,11 @@ network requests. Drop those components if you want a strictly offline build.
 - **Zod** in `services/schemas.ts` as the shared type source (types are inferred
   from the schemas; nothing is parsed at runtime)
 - **Vitest** + **Testing Library** for tests
-- Optional **posthog-js** analytics, off unless a key is set
 
-`react-router-dom` is present only to supply a `BrowserRouter` wrapper — there
-are no routes. Lint, typecheck and tests run on ESLint 9 (flat config, including
-the React Compiler rule set), TypeScript 5.7 and Vitest.
+The published package has one peer dependency (React 18.2+) and ships ESM, type
+declarations and a precompiled stylesheet. Lint, typecheck and tests run on
+ESLint 9 (flat config, including the React Compiler rule set), TypeScript 5.7
+and Vitest.
 
 ## Known limitations
 

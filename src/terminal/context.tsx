@@ -1,5 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useIsFeedConnected } from "../components/ConnectionIndicator.tsx";
 import { TerminalContext, type TerminalContextValue } from "./use-terminal.ts";
 import {
@@ -16,7 +16,6 @@ import {
 import { useTradeSound } from "../hooks/useTradeSound.ts";
 import { safeStorage } from "../lib/safe-storage.ts";
 import type { IndicatorType } from "../lib/indicators.ts";
-import { posthog } from "../lib/posthog.ts";
 import type { CreateJournalEntryInput, UpdateJournalEntryInput } from "../services/api/journal.ts";
 import { api } from "../services/api.ts";
 import {
@@ -102,7 +101,6 @@ function deepLimitFor(timeframe: Timeframe): number {
 
 export function TerminalProvider({ children }: { children: ReactNode }) {
   const queryClient = useQueryClient();
-  const hasTrackedFirstTrade = useRef(false);
 
   const {
     selectedSymbol,
@@ -183,12 +181,11 @@ export function TerminalProvider({ children }: { children: ReactNode }) {
   }, []);
   const { muted: soundMuted, toggleMute: toggleSoundMute, playTradeSound } = useTradeSound();
 
+  // No analytics: a library must not ship telemetry into the host's bundle.
+  // Hosts that want to track fills can listen for "order.filled" on their own
+  // adapter's trading.subscribe().
   const onOrderSuccess = useCallback(() => {
     playTradeSound();
-    if (!hasTrackedFirstTrade.current) {
-      hasTrackedFirstTrade.current = true;
-      posthog.capture("funnel.trade.first_executed", { sessionId: posthog.get_session_id?.() });
-    }
   }, [playTradeSound]);
 
   // ── Dialogs, owned here so any composition of panels gets them

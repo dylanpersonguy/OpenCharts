@@ -28,6 +28,7 @@ npm run typecheck   # tsc --noEmit, strict
 npm run lint        # ESLint 9 — CI runs this with --max-warnings=0
 npm run test        # Vitest
 npm run build && npm run check:size
+npm run build:lib && npm run check:package   # the npm package
 ```
 
 A few notes on what they enforce:
@@ -41,6 +42,10 @@ A few notes on what they enforce:
   candle data was made lazy. If your change pushes it over budget, prefer a
   lazy import; if the growth is justified, raise the budget in
   `scripts/check-bundle-size.mjs` in the same commit and say why.
+
+- **`build:lib`** builds what ships to npm and fails if any stylesheet rule
+  escapes the `.opencharts` scope — one global rule is enough to restyle, or
+  freeze the scrolling of, every page that embeds the terminal.
 
 ## How the project is laid out
 

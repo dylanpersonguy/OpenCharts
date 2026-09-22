@@ -1,40 +1,93 @@
 {
-  "name": "opencharts",
-  "version": "0.2.0",
-  "private": true,
+  "name": "@dylanpersonguy/opencharts",
+  "version": "0.3.0",
+  "description": "Open-source trading terminal: advanced charting, drawing tools and a built-in paper-trading engine, with no backend required.",
+  "keywords": [
+    "trading",
+    "charting",
+    "candlestick",
+    "trading-terminal",
+    "lightweight-charts",
+    "react",
+    "paper-trading",
+    "drawing-tools",
+    "technical-analysis"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dylanpersonguy/OpenCharts.git"
+  },
+  "homepage": "https://github.com/dylanpersonguy/OpenCharts#readme",
+  "bugs": {
+    "url": "https://github.com/dylanpersonguy/OpenCharts/issues"
+  },
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "dist-lib",
+    "NOTICE",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "sideEffects": [
+    "*.css"
+  ],
+  "module": "./dist-lib/index.js",
+  "types": "./dist-lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist-lib/index.d.ts",
+      "import": "./dist-lib/index.js"
+    },
+    "./demo": {
+      "types": "./dist-lib/demo.d.ts",
+      "import": "./dist-lib/demo.js"
+    },
+    "./conformance": {
+      "types": "./dist-lib/adapter/conformance.d.ts",
+      "import": "./dist-lib/conformance.js"
+    },
+    "./style.css": "./dist-lib/style.css",
+    "./package.json": "./package.json"
+  },
   "scripts": {
     "dev": "vite",
     "dev:ci": "vite --host 0.0.0.0 --port 5173",
     "build": "vite build",
     "check:size": "node scripts/check-bundle-size.mjs",
+    "build:lib": "vite build --config vite.lib.config.ts && node scripts/build-lib-css.mjs",
+    "check:package": "node scripts/check-package.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run typecheck && npm run lint -- --max-warnings=0 && npm run test && npm run build:lib && npm run check:package"
+  },
+  "peerDependencies": {
+    "react": ">=18.2.0",
+    "react-dom": ">=18.2.0",
+    "vitest": ">=2"
+  },
+  "peerDependenciesMeta": {
+    "vitest": {
+      "optional": true
+    }
   },
   "dependencies": {
-    "@radix-ui/react-dialog": "^1.1.15",
-    "@radix-ui/react-dropdown-menu": "^2.1.16",
-    "@radix-ui/react-select": "^2.2.6",
     "@radix-ui/react-slot": "^1.2.4",
-    "@radix-ui/react-tabs": "^1.1.13",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.90.21",
-    "autoprefixer": "^10.4.24",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fancy-canvas": "^2.1.0",
     "lightweight-charts": "^4.2.0",
     "lucide-react": "^0.575.0",
-    "postcss": "^8.5.6",
-    "posthog-js": "^1.372.4",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-router-dom": "^7.1.0",
     "tailwind-merge": "^3.5.0",
-    "tailwindcss": "^3.4.19",
     "zod": "^3.25.76",
     "zustand": "^5.0.0"
   },
@@ -47,27 +100,21 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.24",
     "eslint": "^9.39.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.12.0",
     "jsdom": "^25.0.1",
+    "postcss": "^8.5.6",
+    "postcss-prefix-selector": "^2.2.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwindcss": "^3.4.19",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.70.0",
     "vite": "^6.0.0",
+    "vite-plugin-dts": "^5.1.1",
     "vitest": "^2.1.9"
-  },
-  "description": "Open-source trading terminal: advanced charting, drawing tools and a built-in paper-trading engine, with no backend required.",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/dylanpersonguy/OpenCharts.git"
-  },
-  "homepage": "https://github.com/dylanpersonguy/OpenCharts#readme",
-  "bugs": {
-    "url": "https://github.com/dylanpersonguy/OpenCharts/issues"
-  },
-  "engines": {
-    "node": ">=20"
   }
 }

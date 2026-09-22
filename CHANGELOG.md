@@ -7,7 +7,28 @@ major version is `0`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-09-21
+
+OpenCharts is now installable: `npm install @dylanpersonguy/opencharts`. This
+release makes it embeddable without forking — bring your own backend through an
+adapter, put the panels in your own layout, and drop it into a page it will not
+disturb.
+
 ### Added
+
+- **Published as a package**: `@dylanpersonguy/opencharts`, with separate
+  entries for the core (`.`), the bundled demo backend (`/demo`), the adapter
+  conformance suite (`/conformance`) and a precompiled stylesheet
+  (`/style.css`). ESM with type declarations; React 18.2+ is the only peer
+  dependency and every other dependency stays external so hosts dedupe them.
+  The name `opencharts` on npm belongs to an unrelated project.
+- **`<OpenChartsProvider>` is the complete runtime.** It opens the stream, loads
+  instruments and accounts, and supplies the query cache, tooltips, market-data
+  bridge, notifications and an error boundary. An adapter that fails to load
+  shows its error with a retry button instead of a blank screen.
+- **`onNotification()`** streams fills, rejections and warnings so a host can
+  route them into its own UI; `showNotifications={false}` turns the built-in
+  ones off.
 
 - **The adapter contract** (`src/adapter/`). Implement `OpenChartsAdapter` —
   `marketData` required, `trading` and `storage` optional — pass it to
@@ -43,8 +64,33 @@ major version is `0`, minor releases may contain breaking changes.
 
 ### Fixed
 
+- **Notifications were never displayed.** A toast container was removed in an
+  earlier cleanup, so all 77 notification calls — including every order
+  rejection and its reason — were dropped silently, and a trader clicking Buy
+  on an invalid order saw nothing happen. A new accessible viewport renders
+  them: errors are announced assertively and stay longer, and repeated
+  identical messages collapse into one.
+- **The stylesheet leaked into host pages.** It shipped Tailwind's global
+  reset, element styles for inputs and tables, `html, body { overflow: hidden }`
+  — which froze scrolling on any page that embedded the terminal — and theme
+  variables on `:root` named like shadcn/ui's, which overwrote a shadcn host's
+  theme. Every rule is now scoped under `.opencharts` at build time, and the
+  library build fails if a selector escapes.
+- **The runtime only worked inside this repository.** The query client,
+  tooltips, market-data bridge and boot sequence lived in the demo's
+  `main.tsx`, so `<OpenChartsProvider><Terminal /></OpenChartsProvider>` in any
+  other app crashed or showed frozen prices. They now live in the provider.
 - Trading calls rejected with a synchronous throw in places, which skipped
   callers' `.catch()` handlers. Everything returns a rejected promise now.
+
+### Removed
+
+- **Bundled analytics.** PostHog was a leftover from the original platform. Its
+  key is baked in at build time, so in a published library it could never
+  activate — it was only dead weight in every host's bundle. OpenCharts now
+  ships no telemetry.
+- Five unused dependencies (`react-router-dom` and four Radix packages), and
+  the build tools that were listed as runtime dependencies.
 
 ## [0.2.0] — 2026-09-17
 
@@ -131,5 +177,6 @@ and the features that had been sitting dormant were either finished or removed.
 - 72 unused query hooks, 64 MB of unreferenced marketing images, and three
   dependencies nothing imported.
 
-[Unreleased]: https://github.com/dylanpersonguy/OpenCharts/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/dylanpersonguy/OpenCharts/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/dylanpersonguy/OpenCharts/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dylanpersonguy/OpenCharts/releases/tag/v0.2.0

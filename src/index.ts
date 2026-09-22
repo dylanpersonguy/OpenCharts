@@ -2,7 +2,9 @@
  * OpenCharts — an embeddable trading terminal.
  *
  * ```tsx
- * import { OpenChartsProvider, Terminal, createDemoAdapter } from "opencharts";
+ * import { OpenChartsProvider, Terminal } from "@dylanpersonguy/opencharts";
+ * import { createDemoAdapter } from "@dylanpersonguy/opencharts/demo";
+ * import "@dylanpersonguy/opencharts/style.css";
  *
  * <OpenChartsProvider adapter={createDemoAdapter()}>
  *   <Terminal />
@@ -14,4 +16,6 @@
  */
 export * from "./adapter/index.ts";
 export * from "./terminal/index.ts";
+export type { OpenChartsProviderProps } from "./adapter/provider.tsx";
+export { onNotification, type Notification } from "./notifications.ts";
 export type { Candle, Order, Position, Symbol, PlaceOrderInput } from "./services/schemas.ts";

@@ -5,7 +5,6 @@
  * terminal runs against your backend — no fork, no patched files.
  */
 export { OpenChartsProvider } from "./provider.tsx";
-export { createDemoAdapter } from "./demo.ts";
 export {
   getAdapter,
   hasAdapter,

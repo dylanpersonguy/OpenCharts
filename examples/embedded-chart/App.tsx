@@ -1,4 +1,5 @@
-import { createDemoAdapter, OpenChartsProvider } from "../../src/adapter/index.ts";
+import { OpenChartsProvider } from "../../src/adapter/index.ts";
+import { createDemoAdapter } from "../../src/demo.ts";
 import {
   Chart,
   OrderTicket,

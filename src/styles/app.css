@@ -1,0 +1,22 @@
+/*
+ * Page shell for the hosted demo only.
+ *
+ * Everything in global.css is scoped under `.opencharts` at build time (see
+ * postcss.config.js), so it cannot touch a host page. The demo is a full-screen
+ * app, though, so its own page needs sizing — and that must NOT ship to
+ * integrators, whose pages have to keep scrolling. This file is excluded from
+ * the scoping and is imported only by src/main.tsx.
+ */
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  /* Matches the terminal's background so there is no flash around it. */
+  background: #0a0b0e;
+}
