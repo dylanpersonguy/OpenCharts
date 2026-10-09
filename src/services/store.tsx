@@ -288,20 +288,6 @@ interface TradingState {
   liveTicks: Record<string, TickEntry>;
   /** Latest WS candle update keyed by "symbol:timeframe" */
   liveCandleUpdates: Record<string, CandleBar>;
-  /** Monotonic counter bumped on each ReplayStateChanged event — included in
-   *  the candle query key so React Query treats every replay session as a
-   *  brand-new query, eliminating any stale-data / structural-sharing issues. */
-  replayVersion: number;
-  /** Whether the market-data adapter is currently in replay mode (started, paused, or playing). */
-  isReplaying: boolean;
-  /** True only when replay is active but paused. */
-  replayPaused: boolean;
-  /** Current playback speed multiplier. */
-  replaySpeed: number;
-  /** Cursor position in the replay timeline (epoch ms). */
-  replayCursorTimestamp: number | null;
-  /** Session date (YYYY-MM-DD) of the active replay, set when replay starts. */
-  replaySessionDate: string | null;
 
   setActiveAccount: (id: string) => void;
   loadAccounts: () => Promise<void>;
@@ -315,12 +301,6 @@ interface TradingState {
   setSelectedSymbol: (symbol: string) => void;
   setPositions: (positions: Position[]) => void;
   setOrders: (orders: Order[]) => void;
-  setReplaySessionDate: (date: string | null) => void;
-  /** Bump replay version and update replay state — call on ReplayStateChanged WS events */
-  onReplayStateChanged: (
-    action: string,
-    opts?: { speed?: number; cursorTimestamp?: number },
-  ) => void;
 }
 
 export const useTradingStore = create<TradingState>((set, get) => ({
@@ -333,12 +313,6 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   ticks: {},
   liveTicks: {},
   liveCandleUpdates: {},
-  replayVersion: 0,
-  isReplaying: false,
-  replayPaused: false,
-  replaySpeed: 1,
-  replayCursorTimestamp: null,
-  replaySessionDate: null,
 
   setActiveAccount: (id) => {
     localStorage.setItem("active_account", id);
@@ -478,45 +452,7 @@ export const useTradingStore = create<TradingState>((set, get) => ({
     ),
   setPositions: (positions) => set({ positions }),
   setOrders: (orders) => set({ orders }),
-  setReplaySessionDate: (date) => set({ replaySessionDate: date }),
-
-  onReplayStateChanged: (action, opts) => {
-    set((state) => nextReplayState(state, action, opts));
-  },
 }));
-
-/**
- * Play/pause state after a replay action. Seek and speed changes must not
- * alter it — a seek while paused stays paused; only transport actions and
- * stop change the flag.
- */
-function replayPausedAfter(action: string, prevPaused: boolean): boolean {
-  if (action === "stopped" || action === "started" || action === "resumed") return false;
-  if (action === "paused") return true;
-  return prevPaused;
-}
-
-function nextReplayState(
-  state: Pick<
-    TradingState,
-    "replayVersion" | "replayPaused" | "replaySpeed" | "replayCursorTimestamp" | "replaySessionDate"
-  >,
-  action: string,
-  opts?: { speed?: number; cursorTimestamp?: number },
-): Partial<TradingState> {
-  const isStopped = action === "stopped";
-  return {
-    replayVersion: state.replayVersion + 1,
-    isReplaying: !isStopped,
-    replayPaused: replayPausedAfter(action, state.replayPaused),
-    replaySpeed: isStopped ? 1 : (opts?.speed ?? state.replaySpeed),
-    replayCursorTimestamp: isStopped
-      ? null
-      : (opts?.cursorTimestamp ?? state.replayCursorTimestamp),
-    replaySessionDate: isStopped ? null : state.replaySessionDate,
-    liveCandleUpdates: {},
-  };
-}
 
 // Re-register account IDs on every WS (re)connect so sensitive-channel
 // subscriptions (positions/orders/account/ledger) never go out with an empty

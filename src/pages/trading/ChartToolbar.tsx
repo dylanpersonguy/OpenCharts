@@ -37,19 +37,17 @@ import {
   Type,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { INDICATOR_REGISTRY, type IndicatorType } from "../../lib/indicators.ts";
 import { cn, formatNumber } from "../../lib/utils.ts";
 import {
   type DrawingLine,
   type DrawingTool,
   type MagnetMode,
-  REPLAY_ENABLED,
   TIMEFRAMES,
   type Timeframe,
 } from "./constants.ts";
 import { ChartTemplatesMenu } from "./ChartTemplatesMenu.tsx";
-import { ReplayHUD } from "./ReplayHUD.tsx";
 import { getPipDigits } from "./utils.ts";
 
 export interface ChartToolbarProps {
@@ -92,9 +90,6 @@ export interface ChartToolbarProps {
     marginPercent?: number;
     commission?: number;
   };
-  isReplaying?: boolean;
-  /** Account whose sessions can be replayed — mounts the replay HUD when set. */
-  replayAccountId?: string | null;
   activePlugins?: string[];
   onTogglePlugin?: (id: string) => void;
   /** Replace the full indicator list (template load). Enables the templates menu. */
@@ -105,6 +100,12 @@ export interface ChartToolbarProps {
   onCycleMagnet?: () => void;
   stayInDrawingMode?: boolean;
   onToggleStayInDrawingMode?: () => void;
+  /** Timeframes offered (replay limits these to 15m and up). Defaults to all. */
+  timeframes?: readonly Timeframe[];
+  /** Replay sessions are single-symbol: show the symbol but disable the picker. */
+  symbolLocked?: boolean;
+  /** Extra navigation (e.g. Backtest / Sessions link) shown after the symbol. */
+  navSlot?: ReactNode;
 }
 
 export function ChartToolbar({
@@ -128,8 +129,6 @@ export function ChartToolbar({
   tick,
   symbolInfo,
   aiTraderEnabled,
-  isReplaying = false,
-  replayAccountId,
   activePlugins = [],
   onTogglePlugin,
   onSetIndicators,
@@ -138,6 +137,9 @@ export function ChartToolbar({
   onCycleMagnet,
   stayInDrawingMode = false,
   onToggleStayInDrawingMode,
+  timeframes = TIMEFRAMES,
+  symbolLocked = false,
+  navSlot,
 }: ChartToolbarProps) {
   const [showSymbolSearch, setShowSymbolSearch] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState("");
@@ -160,11 +162,12 @@ export function ChartToolbar({
       {/* Symbol Selector — TradingView style */}
       <div className="relative shrink-0">
         <button
-          onClick={() => setShowSymbolSearch((v) => !v)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-secondary font-bold text-sm tracking-tight"
+          onClick={() => !symbolLocked && setShowSymbolSearch((v) => !v)}
+          disabled={symbolLocked}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md hover:bg-secondary font-bold text-sm tracking-tight disabled:hover:bg-transparent disabled:cursor-default"
         >
           {selectedSymbol}
-          <ChevronDown className="h-3 w-3 opacity-60" />
+          {!symbolLocked && <ChevronDown className="h-3 w-3 opacity-60" />}
         </button>
 
         {showSymbolSearch && (
@@ -265,6 +268,8 @@ export function ChartToolbar({
         )}
       </div>
 
+      {navSlot}
+
       {/* Live Price — bid / ask badges like TradingView */}
       {tick && (
         <div className="flex items-center gap-1 md:gap-1.5 px-1.5 md:px-2 border-l border-r border-border shrink-0">
@@ -287,20 +292,17 @@ export function ChartToolbar({
         </div>
       )}
 
-      {/* Timeframe Selector — locked to 1m while a replay session is active */}
+      {/* Timeframe Selector */}
       <div className="flex items-center gap-0.5 ml-1 shrink-0">
-        {TIMEFRAMES.map((tf) => (
+        {timeframes.map((tf) => (
           <button
             key={tf}
             onClick={() => onTimeframeChange(tf)}
-            disabled={isReplaying}
-            title={isReplaying ? "Timeframe is fixed to 1m during replay" : undefined}
             className={cn(
               "px-2 py-1 rounded-md text-xs font-medium transition-all",
               tf === timeframe
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "hover:bg-secondary/80 text-muted-foreground hover:text-foreground",
-              isReplaying && "opacity-40 cursor-default",
             )}
           >
             {tf}
@@ -308,8 +310,6 @@ export function ChartToolbar({
         ))}
       </div>
 
-      {/* Session replay controls — disabled until the feature is QA'd */}
-      {REPLAY_ENABLED && replayAccountId != null && <ReplayHUD accountId={replayAccountId} />}
 
       {/* Chart layout templates (save/load/autosave) */}
       {onSetIndicators && onSetPlugins && (

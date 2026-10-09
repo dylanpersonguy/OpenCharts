@@ -1,6 +1,7 @@
 import type { CandlestickData, Time } from "lightweight-charts";
 import type { CandleData } from "../../lib/indicators.ts";
-import { KNOWN_CURRENCIES } from "./constants.ts";
+import { bucketStart } from "../../services/replay/data/aggregate.ts";
+import { KNOWN_CURRENCIES, TF_INTERVAL_MS } from "./constants.ts";
 import type { Timeframe } from "./constants.ts";
 
 /** Derive pip (decimal) precision from symbolInfo.tickSize or symbol name */
@@ -81,19 +82,10 @@ export function extractCurrencies(symbol: string): string[] {
   return [...new Set(found)];
 }
 
-/** Return the candle-bucket start (unix seconds) for a given timestamp */
+/** Return the candle-bucket start (unix seconds) for a given timestamp. Weekly bars open on Monday (UTC). */
 export function getCandleBucketTime(timestampMs: number, tf: Timeframe): number {
-  const SEC = 1000;
-  const intervals: Record<Timeframe, number> = {
-    "1m": 60 * SEC,
-    "5m": 5 * 60 * SEC,
-    "15m": 15 * 60 * SEC,
-    "30m": 30 * 60 * SEC,
-    "1h": 60 * 60 * SEC,
-    "4h": 4 * 60 * 60 * SEC,
-    "1d": 24 * 60 * 60 * SEC,
-    "1w": 7 * 24 * 60 * 60 * SEC,
-  };
-  const ms = intervals[tf];
-  return Math.floor((Math.floor(timestampMs / ms) * ms) / 1000);
+  const sec = Math.floor(timestampMs / 1000);
+  if (tf === "1w") return bucketStart(sec, "1w");
+  const size = TF_INTERVAL_MS[tf] / 1000;
+  return Math.floor(sec / size) * size;
 }

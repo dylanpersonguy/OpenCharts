@@ -23,9 +23,11 @@ export class ApiError extends Error {
 // react-query rejects `undefined` query results, so resolve to null instead.
 const benign = () => Promise.resolve(null);
 
+// Typed as the demo table only: calling a method it doesn't declare is a
+// compile error. The runtime fallback stays as a safety net for untyped callers.
 export const api = new Proxy(demoApi as Record<string, unknown>, {
   get(target, prop: string) {
     if (prop in target) return target[prop];
     return benign;
   },
-}) as typeof demoApi & Record<string, (...args: never[]) => Promise<unknown>>;
+}) as typeof demoApi;

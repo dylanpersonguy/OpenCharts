@@ -72,7 +72,7 @@ export function useChartDrawings(symbol: string, timeframe: string) {
   const applyRemove = useCallback((id: string) => {
     drawingsRef.current = drawingsRef.current.filter((x) => x.id !== id);
     setDrawings(drawingsRef.current);
-    api.chartDrawings.remove(id).catch(() => {});
+    api.chartDrawings.remove(id, symbolRef.current).catch(() => {});
   }, []);
 
   const pushHistory = useCallback((op: HistoryOp) => {

@@ -66,6 +66,8 @@ import { ObjectTreePanel } from "./ObjectTreePanel.tsx";
 import { useChallengeLevels } from "./useChallengeLevels.ts";
 import { useIndicators } from "./useIndicators.ts";
 import { useNewsOverlay } from "./useNewsOverlay.ts";
+import { diffSeries } from "./series-diff.ts";
+import { useChartClick } from "./useChartClick.ts";
 import { useSlTpDrag } from "./useSlTpDrag.ts";
 import {
   formatCountdown,
@@ -255,10 +257,15 @@ export interface ChartPanelProps {
   /** Context-menu "Remove N indicators". */
   onClearIndicators?: () => void;
   /**
-   * Session replay is active — candles are a historical slice, so the
-   * staleness watchdog must not treat the old last-bar as a data gap.
+   * Bar replay is active — candles are a historical slice driven by the replay
+   * cursor: no wall-clock countdown, no staleness watchdog, no scroll-back
+   * history fetch, and `tick` only drives the bid/ask lines.
    */
   isReplaying?: boolean;
+  /** Plain chart click (ignored while a drawing tool is armed): bar time in unix seconds + price. */
+  onChartClick?: (timeSec: number, price: number) => void;
+  /** Changing this forces a full reload + re-fit of the series (replay jump / session switch). */
+  dataResetKey?: string | number;
 }
 
 // ── Chart plugin overlays ─────────────────────────────────────────────────────
@@ -778,14 +785,16 @@ function addOrderOverlay(
 ): void {
   if (
     ord.symbolName !== symbol ||
-    ord.status !== "PENDING" ||
-    !Number.isFinite(ord.price as number)
+    ord.status !== "PENDING"
   ) {
     return;
   }
+  // Stop orders rest at their trigger (stopPrice); limits at their limit price.
+  const level = ord.type === "STOP" ? ord.stopPrice : ord.price;
+  if (!Number.isFinite(level as number)) return;
   out.push(
     series.createPriceLine({
-      price: ord.price as number,
+      price: level as number,
       color: orderColor,
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
@@ -1102,6 +1111,8 @@ export function ChartPanel({
   onClearDrawings,
   onClearIndicators,
   isReplaying = false,
+  onChartClick,
+  dataResetKey,
 }: ChartPanelProps) {
   const queryClient = useQueryClient();
   const lastGapRefetchAtRef = useRef<number>(0);
@@ -1138,6 +1149,9 @@ export function ChartPanel({
   // re-bind against the live chart — without it they'd capture null refs on
   // mount (the create-effect runs after them) and never attach.
   const [chartEpoch, setChartEpoch] = useState(0);
+  // Read at chart-creation time; replay vs live is fixed for a mounted terminal.
+  const isReplayingRef = useRef(isReplaying);
+  isReplayingRef.current = isReplaying;
 
   // OHLCV legend state
   const [legend, setLegend] = useState<OhlcvLegend | null>(null);
@@ -1253,6 +1267,7 @@ export function ChartPanel({
     onUndoDrawingRef.current = onUndoDrawing;
     onRedoDrawingRef.current = onRedoDrawing;
   });
+  useChartClick(chartRef, candleSeriesRef, drawingToolRef, chartEpoch, onChartClick);
 
   // Clone the selected drawing, offset 5 bars right so the copy is visible.
   const handleCloneDrawing = useCallback(() => {
@@ -1389,7 +1404,7 @@ export function ChartPanel({
     [onAddDrawing, pipDigits, timeframe, selectedSymbol],
   );
 
-  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark);
+  useIndicators(chartRef, candleSeriesRef, chartData, activeIndicators, isDark, chartEpoch);
 
   // ── Replay trade event markers ─────────────────────────────
   useEffect(() => {
@@ -1415,7 +1430,7 @@ export function ChartPanel({
   // ── Candle close countdown timer ───────────────────────────
   useEffect(() => {
     const intervalMs = TF_INTERVAL_MS[timeframe];
-    if (!intervalMs || intervalMs >= 86_400_000) {
+    if (isReplaying || !intervalMs || intervalMs >= 86_400_000) {
       setCountdown("");
       return;
     }
@@ -1429,7 +1444,7 @@ export function ChartPanel({
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [timeframe]);
+  }, [timeframe, isReplaying]);
 
   // ── Create / destroy the chart instance ────────────────────
   useEffect(() => {
@@ -1624,7 +1639,10 @@ export function ChartPanel({
         if (!historyLoadCancelled) setHistoricalExtra((prev) => [...bars, ...prev]);
       },
     );
-    chart.timeScale().subscribeVisibleLogicalRangeChange(handleRangeChange);
+    // Replay owns its own history window, so it never fetches older bars here.
+    if (!isReplayingRef.current) {
+      chart.timeScale().subscribeVisibleLogicalRangeChange(handleRangeChange);
+    }
 
     // Signal listener-binding hooks that a live chart instance now exists.
     setChartEpoch((e) => e + 1);
@@ -1657,6 +1675,9 @@ export function ChartPanel({
         fetchFromMs: 0,
       };
       lastGapRefetchAtRef.current = 0;
+      // A fresh chart has empty series: force the data effect to do a full load.
+      lastLoadKeyRef.current = "";
+      prevChartDataRef.current = [];
     };
   }, [
     isDark,
@@ -1746,6 +1767,7 @@ export function ChartPanel({
   // ── Refs for smooth real-time streaming ────────────────
   const lastCandleRef = useRef<CandlestickData<Time> | null>(null);
   const lastLoadKeyRef = useRef<string>("");
+  const prevChartDataRef = useRef<CandlestickData<Time>[]>([]);
   const latestLiveCandleRef = useRef<typeof liveCandle | undefined>(undefined);
   // Authoritative server candle timestamp, normalised to unix MILLISECONDS —
   // used to ignore ticks that pre-date the latest server CandleUpdate (those can
@@ -1791,8 +1813,22 @@ export function ChartPanel({
     const series = candleSeriesRef.current;
     if (!series || chartData.length === 0) return;
     const ctx = makeRtCtx(series);
-    const loadKey = `${selectedSymbol}:${timeframe}`;
+    const loadKey = `${selectedSymbol}:${timeframe}:${dataResetKey ?? ""}`;
     const isNewChart = lastLoadKeyRef.current !== loadKey;
+    const prevData = prevChartDataRef.current;
+    prevChartDataRef.current = chartData;
+
+    // Replay steps only touch the last bar or append one — update in place so
+    // the chart keeps following the right edge and avoids an O(n) setData.
+    if (!isNewChart && isReplayingRef.current) {
+      const diff = diffSeries(prevData, chartData);
+      if (diff.kind !== "reset") {
+        applyIncremental(diff.kind === "update" ? diff.bars : [], volumeData, series, volumeSeriesRef.current);
+        lastCandleRef.current = chartData[chartData.length - 1] ?? null;
+        setLegend(legendFromSeries(chartData, volumeData));
+        return;
+      }
+    }
 
     series.setData(chartData);
     volumeSeriesRef.current?.setData(volumeData);
@@ -1810,8 +1846,10 @@ export function ChartPanel({
     lastLoadKeyRef.current = loadKey;
     liveCandleTsRef.current = 0;
     replayBufferedLive(buffered, chartData, ctx);
+    if (isReplayingRef.current) return;
     return scheduleStaleRefetch(chartData, ctx);
-  }, [chartData, volumeData, selectedSymbol, timeframe, makeRtCtx]);
+    // chartEpoch: refill the series whenever the chart instance is recreated.
+  }, [chartData, volumeData, selectedSymbol, timeframe, dataResetKey, makeRtCtx, chartEpoch]);
 
   // ── Real-time candle updates ──────────────────────────
 
@@ -1831,9 +1869,9 @@ export function ChartPanel({
   // overwrite this tick-merged bar via series.update.
   useEffect(() => {
     const series = candleSeriesRef.current;
-    if (!series || !tick) return;
+    if (!series || !tick || isReplaying) return;
     applyTick(tick, makeRtCtx(series));
-  }, [tick, makeRtCtx]);
+  }, [tick, makeRtCtx, isReplaying]);
 
   // ── Line-cross price alerts (client-side, in-session) ──────────
   // Fire a toast + beep when the live mid price crosses an alert-enabled
@@ -2106,32 +2144,59 @@ function toCandleRow(c: Candle): CandleRow {
   };
 }
 
-// Keep the last row for each timestamp (input must be time-sorted ascending).
-function dedupeByTime(sorted: CandleRow[]): CandleRow[] {
-  const out: CandleRow[] = [];
-  for (let i = 0; i < sorted.length; i++) {
-    const cur = sorted[i]!;
-    const next = sorted[i + 1];
-    if (!next || (cur.time as number) !== (next.time as number)) out.push(cur);
-  }
-  return out;
+interface CachedRows {
+  chart: CandlestickData<Time>;
+  volume: HistogramData<Time>;
 }
 
+/**
+ * Candles → chart rows. Rows are cached per input candle object so a replay
+ * step that reuses unchanged candles yields the same row objects, which lets
+ * the setData effect detect "only the last bar changed" by identity.
+ */
 function useChartData(candles: Candle[], colors: { volumeUp: string; volumeDown: string }) {
+  // A fresh cache whenever the volume colors change, so cached rows never carry stale colors.
+  const cache = useMemo(() => {
+    void colors.volumeUp;
+    void colors.volumeDown;
+    return new WeakMap<Candle, CachedRows>();
+  }, [colors.volumeUp, colors.volumeDown]);
+
   return useMemo(() => {
-    const sorted = candles
-      .map(toCandleRow)
-      .filter((c) => !Number.isNaN(c.time as number) && (c.time as number) > 0)
-      .sort((a, b) => (a.time as number) - (b.time as number));
-    const deduped = dedupeByTime(sorted);
+    const rows = candles.map((c) => {
+      const hit = cache.get(c);
+      if (hit) return hit;
+      const { volume, ...chart } = toCandleRow(c);
+      const made: CachedRows = {
+        chart,
+        volume: { time: chart.time, value: volume, color: chart.close >= chart.open ? colors.volumeUp : colors.volumeDown },
+      };
+      cache.set(c, made);
+      return made;
+    });
+    const sorted = rows
+      .filter((r) => !Number.isNaN(r.chart.time as number) && (r.chart.time as number) > 0)
+      .sort((a, b) => (a.chart.time as number) - (b.chart.time as number));
+    // Keep the last of any duplicate timestamps.
+    const deduped = sorted.filter((r, i) => (sorted[i + 1]?.chart.time as number | undefined) !== (r.chart.time as number));
 
-    const chartData: CandlestickData<Time>[] = deduped.map(({ volume: _v, ...rest }) => rest);
-    const volumeData: HistogramData<Time>[] = deduped.map((c) => ({
-      time: c.time,
-      value: c.volume,
-      color: c.close >= c.open ? colors.volumeUp : colors.volumeDown,
-    }));
-
+    const chartData: CandlestickData<Time>[] = deduped.map((r) => r.chart);
+    const volumeData: HistogramData<Time>[] = deduped.map((r) => r.volume);
     return { chartData, volumeData };
-  }, [candles, colors.volumeUp, colors.volumeDown]);
+  }, [candles, cache, colors.volumeUp, colors.volumeDown]);
+}
+
+/** Apply replay bar changes with series.update (last bar replaced and/or one appended). */
+function applyIncremental(
+  bars: readonly CandlestickData<Time>[],
+  volumeData: readonly HistogramData<Time>[],
+  series: ISeriesApi<"Candlestick">,
+  volume: ISeriesApi<"Histogram"> | null,
+): void {
+  const start = volumeData.length - bars.length;
+  bars.forEach((bar, i) => {
+    series.update(bar);
+    const v = volumeData[start + i];
+    if (v) volume?.update(v);
+  });
 }

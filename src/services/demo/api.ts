@@ -1,8 +1,21 @@
 import type { DrawingLine } from "../../pages/trading/constants.ts";
+import type {
+  CreateJournalEntryInput,
+  JournalEntriesResponse,
+  JournalEntry,
+  UpdateJournalEntryInput,
+} from "../api/journal.ts";
 import type { Candle } from "../schemas.ts";
 import { getHistory } from "./candles.ts";
 import * as engine from "./engine.ts";
 import { DEMO_SYMBOLS } from "./instruments.ts";
+import {
+  backendForAccount,
+  backendForOrder,
+  backendForPosition,
+  type OrderModifications,
+  type PositionModifications,
+} from "./replay-router.ts";
 
 /**
  * Demo-mode API. Replaces the HTTP client for everything the terminal needs:
@@ -47,11 +60,19 @@ const chartDrawings = {
     writeDrawings(symbol, list);
     return Promise.resolve({ saved: true });
   },
-  remove: (drawingId: string) => {
-    for (const s of DEMO_SYMBOLS) {
-      writeDrawings(s.name, readDrawings(s.name).filter((d) => d.id !== drawingId));
+  /** `symbolKey` scopes the delete (replay sessions use keys like `replay:<id>:XAUUSD`). */
+  remove: (drawingId: string, symbolKey?: string) => {
+    const keys = symbolKey ? [symbolKey] : DEMO_SYMBOLS.map((s) => s.name);
+    for (const key of keys) {
+      writeDrawings(key, readDrawings(key).filter((d) => d.id !== drawingId));
     }
     return Promise.resolve({ deleted: true });
+  },
+  /** Drop every drawing list whose key starts with `prefix` (used when a replay session is deleted). */
+  clearScope: (prefix: string) => {
+    const keys = Object.keys(localStorage).filter((k) => k.startsWith(DRAW_KEY(prefix)));
+    for (const k of keys) localStorage.removeItem(k);
+    return Promise.resolve({ cleared: keys.length });
   },
   clear: (symbol: string) => {
     writeDrawings(symbol, []);
@@ -66,18 +87,19 @@ const candlesMeta = (candles: Candle[]) => ({
 
 export const demoApi = {
   // ── Auth (no real auth in demo) ──
-  login: () => Promise.resolve(authResponse()),
+  login: (_email: string, _password: string) => Promise.resolve(authResponse()),
   demoLogin: () => Promise.resolve(authResponse()),
   register: () => Promise.resolve(authResponse()),
-  completeMfaLogin: () => Promise.resolve(authResponse()),
-  logout: () => Promise.resolve({ success: true }),
-  refreshToken: () => Promise.resolve({ accessToken: "demo-token", refreshToken: "demo-refresh" }),
+  completeMfaLogin: (_mfaToken: string, _code: string) => Promise.resolve(authResponse()),
+  logout: (_refreshToken?: string) => Promise.resolve({ success: true }),
+  refreshToken: (_refreshToken?: string | null) => Promise.resolve({ accessToken: "demo-token", refreshToken: "demo-refresh" }),
   getMyProfile: () => Promise.resolve(DEMO_USER),
   getMe: () => Promise.resolve(DEMO_USER),
 
   // ── Accounts ──
   getMyAccounts: () => Promise.resolve(engine.getAccounts()),
-  getAccount: () => Promise.resolve(engine.getAccount()),
+  getAccount: (accountId?: string) =>
+    Promise.resolve(backendForAccount(accountId)?.getAccount() ?? engine.getAccount()),
   getEquityHistory: () => Promise.resolve([]),
   getLedger: () => Promise.resolve({ data: [], total: 0, page: 1, pageSize: 50, totalPages: 0 }),
   getAccountStats: () =>
@@ -91,8 +113,8 @@ export const demoApi = {
       worstTrade: 0,
     }),
   setAccountLabel: () => Promise.resolve({ success: true }),
-  getAccountMetrics: () => {
-    const a = engine.getAccount();
+  getAccountMetrics: (accountId?: string) => {
+    const a = backendForAccount(accountId)?.getAccount() ?? engine.getAccount();
     return Promise.resolve({
       accountId: a.id,
       equity: a.equity,
@@ -129,7 +151,12 @@ export const demoApi = {
 
   // ── Symbols & market data ──
   getSymbols: () => Promise.resolve(DEMO_SYMBOLS),
-  getCandles: (symbol: string, timeframe: string, limit?: number) =>
+  getCandles: (
+    symbol: string,
+    timeframe: string,
+    limit?: number,
+    _range?: { fromMs?: number; toMs?: number },
+  ) =>
     Promise.resolve(getHistory(symbol, timeframe, limit)),
   getCandlesWithMeta: (symbol: string, timeframe: string, limit?: number) =>
     Promise.resolve(candlesMeta(getHistory(symbol, timeframe, limit))),
@@ -138,41 +165,56 @@ export const demoApi = {
     return Promise.resolve({ symbol, bid: price, ask: price, timestamp: Date.now() });
   },
   getMarketDataHealth: () => Promise.resolve({ status: "ok" }),
-  getEconomicCalendar: () => Promise.resolve([]),
+  getEconomicCalendar: (_currencies: string[], _from?: string, _to?: string) =>
+    Promise.resolve([] as unknown[]),
 
-  // ── Trading (paper engine) ──
-  placeOrder: (data: engine.PlaceOrderArgs) => Promise.resolve(engine.placeOrder(data)),
-  cancelOrder: (orderId: string) => Promise.resolve(engine.cancelOrder(orderId)),
-  modifyOrder: (orderId: string) => Promise.resolve(engine.getOrders().find((o) => o.id === orderId)),
+  // ── Trading (paper engine; replay sessions are routed by account/position/order id) ──
+  placeOrder: (data: engine.PlaceOrderArgs) =>
+    backendForAccount(data.accountId)?.placeOrder(data) ?? Promise.resolve(engine.placeOrder(data)),
+  cancelOrder: (orderId: string) =>
+    backendForOrder(orderId)?.cancelOrder(orderId) ?? Promise.resolve(engine.cancelOrder(orderId)),
+  // Live demo orders fill immediately, so only replay sessions have pending orders to modify.
+  modifyOrder: (orderId: string, mods: OrderModifications) =>
+    backendForOrder(orderId)?.modifyOrder(orderId, mods) ??
+    Promise.resolve(engine.getOrders().find((o) => o.id === orderId)),
   cancelAllOrders: () => Promise.resolve({ success: true }),
-  getOrders: () => Promise.resolve(engine.getOrders()),
-  getPositions: () => Promise.resolve(engine.getPositions()),
+  getOrders: (accountId?: string, _status?: string) =>
+    Promise.resolve(backendForAccount(accountId)?.getOrders() ?? engine.getOrders()),
+  getPositions: (accountId?: string) =>
+    Promise.resolve(backendForAccount(accountId)?.getPositions() ?? engine.getPositions()),
   getOpenPositionCount: () => Promise.resolve(engine.getPositions().length),
   closePosition: (positionId: string, quantity?: number) =>
+    backendForPosition(positionId)?.closePosition(positionId, quantity) ??
     Promise.resolve(engine.closePosition(positionId, quantity)),
-  closeAllPositions: () => Promise.resolve(engine.closeAllPositions()),
-  modifyPosition: (positionId: string, mods: { takeProfit?: number | null; stopLoss?: number | null }) =>
+  closeAllPositions: (accountId?: string) =>
+    backendForAccount(accountId)?.closeAllPositions() ?? Promise.resolve(engine.closeAllPositions()),
+  modifyPosition: (positionId: string, mods: PositionModifications) =>
+    backendForPosition(positionId)?.modifyPosition(positionId, mods) ??
     Promise.resolve(engine.modifyPosition(positionId, mods)),
   getFills: () => Promise.resolve({ data: engine.getFills(), total: engine.getFills().length, page: 1, pageSize: 50, totalPages: 1 }),
-  getClosedPositions: () =>
-    Promise.resolve({ data: engine.getClosedPositions(), total: engine.getClosedPositions().length, page: 1, pageSize: 50, totalPages: 1 }),
+  getClosedPositions: (accountId?: string, _page?: number) => {
+    const data = backendForAccount(accountId)?.getClosedPositions() ?? engine.getClosedPositions();
+    return Promise.resolve({ data, total: data.length, page: 1, pageSize: data.length || 50, totalPages: 1 });
+  },
   getClosedPositionsSummary: () => Promise.resolve({ realizedPnl: 0, trades: 0, wins: 0, losses: 0 }),
   getFillQuality: () => Promise.resolve([]),
 
   // ── Trade journal (localStorage-free demo: empty) ──
-  getJournalEntries: () => Promise.resolve([]),
-  createJournalEntry: () => Promise.resolve(null),
-  updateJournalEntry: () => Promise.resolve(null),
-  deleteJournalEntry: () => Promise.resolve({ success: true }),
+  getJournalEntries: (_accountId: string, _opts?: { limit?: number; symbol?: string }) =>
+    Promise.resolve<JournalEntriesResponse>({ entries: [], total: 0 }),
+  createJournalEntry: (_input: CreateJournalEntryInput) => Promise.resolve<JournalEntry | null>(null),
+  updateJournalEntry: (_id: string, _input: UpdateJournalEntryInput) =>
+    Promise.resolve<JournalEntry | null>(null),
+  deleteJournalEntry: (_id: string) => Promise.resolve({ success: true }),
 
   // ── Chart persistence ──
   chartDrawings,
-  savePreferences: () => Promise.resolve({ success: true }),
+  getPreferences: () => Promise.resolve<Record<string, string> | null>(null),
+  savePreferences: (_prefs: Record<string, string>) => Promise.resolve({ success: true }),
 
   // ── Feature gating / misc (terminal reads these on mount) ──
   getFeatureFlags: () => Promise.resolve({}),
-  isAiTraderEnabled: () => Promise.resolve(false),
+  isAiTraderEnabled: () => Promise.resolve({ enabled: false }),
   getAnnouncements: () => Promise.resolve([]),
   getAnnouncementsUnreadCount: () => Promise.resolve(0),
-  replayGetSession: () => Promise.resolve(null),
 };

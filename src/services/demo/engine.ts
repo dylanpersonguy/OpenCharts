@@ -237,6 +237,8 @@ export function modifyPosition(
     unrealizedPnl: pos.unrealizedPnl,
     quantity: pos.quantity,
     averagePrice: pos.entryPrice,
+    stopLoss: pos.stopLoss,
+    takeProfit: pos.takeProfit,
   });
   return { ...pos };
 }

@@ -15,6 +15,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "@propsim/types": path.resolve(__dirname, "./src/vendor/types.ts"),
     },
   },
 });
