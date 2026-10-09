@@ -1,13 +1,18 @@
 import { useEffect, useState } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
+import { ReplaySessionsPage } from "./pages/replay/ReplaySessionsPage.tsx";
+import { ReplayStatsPage } from "./pages/replay/ReplayStatsPage.tsx";
+import { ReplayTerminalPage } from "./pages/replay/ReplayTerminalPage.tsx";
 import { TradingPage } from "./pages/TradingPage.tsx";
 import { useAuthStore, useTradingStore } from "./services/store.tsx";
 
 /**
  * OpenCharts entry point.
  *
- * No auth / routing: the app boots straight into the trading terminal backed by
- * the in-browser demo session (real bundled OHLC + paper-trading engine). A
- * demo "login" seeds the local user/account and starts the market-data feed.
+ * No auth: the app boots straight into the trading terminal backed by the
+ * in-browser demo session (real bundled OHLC + paper-trading engine). A demo
+ * "login" seeds the local user/account and starts the market-data feed.
+ * `/replay` hosts the bar-replay backtester (sessions, terminal, stats).
  */
 export function App() {
   const [ready, setReady] = useState(false);
@@ -40,5 +45,13 @@ export function App() {
     );
   }
 
-  return <TradingPage />;
+  return (
+    <Routes>
+      <Route path="/" element={<TradingPage />} />
+      <Route path="/replay" element={<ReplaySessionsPage />} />
+      <Route path="/replay/:sessionId" element={<ReplayTerminalPage />} />
+      <Route path="/replay/:sessionId/stats" element={<ReplayStatsPage />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
 }

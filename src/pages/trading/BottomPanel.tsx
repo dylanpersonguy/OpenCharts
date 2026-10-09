@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from "react";
-import { TrendingUp, Clock, History, Globe, Newspaper, Bot } from "lucide-react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
+import { TrendingUp, Clock, History, Globe, Newspaper, Bot, BookOpen } from "lucide-react";
 import { useAuthStore } from "../../services/store.tsx";
 import { useTradingStore } from "../../services/store.tsx";
 import {
@@ -23,7 +23,7 @@ import { formatCurrency, formatNumber, formatDate, cn, pnlClass } from "../../li
 import { MOCK_EVENTS, MOCK_NEWS } from "./constants.ts";
 import { PositionsTable } from "./PositionsTable.tsx";
 import { OrdersTable } from "./OrdersTable.tsx";
-import { computeLivePnl, computeLivePrice } from "../../lib/livePnl.ts";
+import { computeLivePnl, computeLivePrice, type LiveTick } from "../../lib/livePnl.ts";
 
 type TradingActionError = {
   error?: { message?: string };
@@ -57,6 +57,10 @@ export interface BottomPanelProps {
   aiTraderEnabled?: boolean;
   height?: number;
   isFeedConnected?: boolean;
+  /** Price source for live P&L; defaults to the live feed's ticks (replay passes its own). */
+  ticks?: Record<string, LiveTick>;
+  /** Replay mode: renders this in a Journal tab and hides the live-only calendar/news tabs. */
+  journalSlot?: ReactNode;
 }
 
 export function BottomPanel({
@@ -77,6 +81,8 @@ export function BottomPanel({
   aiTraderEnabled,
   height = 220,
   isFeedConnected = true,
+  ticks: ticksOverride,
+  journalSlot,
 }: BottomPanelProps) {
   const isDemo = useAuthStore((s) => s.isDemo);
   const cancelOrder = useCancelOrder();
@@ -158,7 +164,9 @@ export function BottomPanel({
     });
   };
 
-  const ticks = useTradingStore((s) => s.ticks);
+  const liveTicks = useTradingStore((s) => s.ticks);
+  const ticks = ticksOverride ?? liveTicks;
+  const replayMode = journalSlot !== undefined;
   const openPositions = positions
     .filter((position) => position.quantity > 0)
     .map((p) => {
@@ -184,10 +192,14 @@ export function BottomPanel({
     { key: "positions", label: "Positions", icon: TrendingUp, count: openPositions.length },
     { key: "orders", label: "Orders", icon: Clock, count: pendingOrders.length },
     { key: "history", label: "Trade History", icon: History },
-    // { key: "journal", label: "Journal", icon: BookOpen }, // hidden pending QA (PS-285)
-    { key: "calendar", label: "Calendar", icon: Globe },
-    { key: "news", label: "News", icon: Newspaper },
-    ...(aiTraderEnabled ? [{ key: "ai-trader" as const, label: "AI Trader", icon: Bot }] : []),
+    // The live journal is hidden pending QA (PS-285); replay sessions have their own.
+    ...(replayMode
+      ? [{ key: "journal" as const, label: "Journal", icon: BookOpen }]
+      : [
+          { key: "calendar" as const, label: "Calendar", icon: Globe },
+          { key: "news" as const, label: "News", icon: Newspaper },
+        ]),
+    ...(aiTraderEnabled && !replayMode ? [{ key: "ai-trader" as const, label: "AI Trader", icon: Bot }] : []),
   ];
 
   return (
@@ -265,7 +277,8 @@ export function BottomPanel({
           />
         )}
         {tab === "history" && <TradeHistoryTable accountId={accountId} />}
-        {tab === "journal" && (
+        {tab === "journal" && replayMode && journalSlot}
+        {tab === "journal" && !replayMode && (
           <TradeJournalPanel
             entries={journalEntries}
             isLoading={journalLoading}

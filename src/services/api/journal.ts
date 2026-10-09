@@ -15,6 +15,13 @@ export interface JournalEntry {
   tags: string[];
   notes: string;
   createdAt: string;
+  /** Replay session the entry belongs to (backtesting journal only). */
+  sessionId?: string | null;
+  /** Strategy / setup label, e.g. "Breakout". */
+  setup?: string | null;
+  /** Mistake labels, e.g. ["Moved SL", "FOMO entry"]. */
+  mistakes?: string[];
+  updatedAt?: string;
 }
 
 export interface JournalEntriesResponse {
@@ -34,6 +41,8 @@ export interface CreateJournalEntryInput {
   rating?: number;
   tags?: string[];
   notes?: string;
+  setup?: string | null;
+  mistakes?: string[];
 }
 
 export interface UpdateJournalEntryInput {
@@ -41,6 +50,8 @@ export interface UpdateJournalEntryInput {
   rating?: number;
   tags?: string[];
   notes?: string;
+  setup?: string | null;
+  mistakes?: string[];
 }
 
 type AnyRecord = Record<string, unknown>;

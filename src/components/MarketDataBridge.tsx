@@ -1,6 +1,6 @@
 import { useEffect, startTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuthStore, useTradingStore } from "../services/store.tsx";
+import { useTradingStore } from "../services/store.tsx";
 import { wsClient } from "../services/ws.ts";
 import { queryKeys } from "../services/queries.ts";
 import type { Position, Order } from "../services/schemas.ts";
@@ -36,14 +36,7 @@ type MarketDataEvent =
       volume: number;
       timestamp: number;
     }
-  | { eventType: "CandleClosed"; symbol: string; timeframe: string }
-  | {
-      eventType: "ReplayStateChanged";
-      action?: string;
-      speed?: number;
-      userId?: string;
-      cursorTimestamp?: number;
-    };
+  | { eventType: "CandleClosed"; symbol: string; timeframe: string };
 
 // Position WS event types — enriched server-side with _entity for direct cache updates
 type PositionWsEvent = {
@@ -54,6 +47,10 @@ type PositionWsEvent = {
   unrealizedPnl?: number;
   quantity?: number;
   averagePrice?: number;
+  currentPrice?: number;
+  // Present only when SL/TP changed; null clears the level.
+  stopLoss?: number | null;
+  takeProfit?: number | null;
   // Attached by ws-handler enrichment (PositionOpened only)
   _entity?: Position;
 };
@@ -168,12 +165,11 @@ export function MarketDataBridge() {
   const updateTick = useTradingStore((s) => s.updateTick);
   const updateLiveTick = useTradingStore((s) => s.updateLiveTick);
   const updateCandleFromWs = useTradingStore((s) => s.updateCandleFromWs);
-  const onReplayStateChanged = useTradingStore((s) => s.onReplayStateChanged);
   const updateAccountInStore = useTradingStore((s) => s.updateAccountInStore);
   const loadAccounts = useTradingStore((s) => s.loadAccounts);
   const queryClient = useQueryClient();
 
-  // Market-data: ticks, candles, replay.
+  // Market-data: ticks and candles.
   useEffect(() => {
     const unsub = wsClient.subscribe("market-data", (event) => {
       const wsEvent = event as MarketDataEvent;
@@ -195,20 +191,12 @@ export function MarketDataBridge() {
         queryClient.invalidateQueries({
           queryKey: queryKeys.market.candles(wsEvent.symbol, wsEvent.timeframe),
         });
-      } else if (wsEvent.eventType === "ReplayStateChanged") {
-        const currentUserId = useAuthStore.getState().user?.id;
-        if (wsEvent.userId && currentUserId && wsEvent.userId !== currentUserId) return;
-        onReplayStateChanged(wsEvent.action || "started", {
-          speed: wsEvent.speed,
-          cursorTimestamp: wsEvent.cursorTimestamp,
-        });
-        queryClient.invalidateQueries({ queryKey: ["candles"] });
       }
     });
     return () => {
       unsub();
     };
-  }, [updateTick, updateLiveTick, updateCandleFromWs, onReplayStateChanged, queryClient]);
+  }, [updateTick, updateLiveTick, updateCandleFromWs, queryClient]);
 
   // Account/equity events.
   useEffect(() => {
@@ -238,7 +226,8 @@ export function MarketDataBridge() {
   //   PositionOpened  — ws-handler attaches full position as _entity; we append
   //                     directly to the cache. If _entity is absent (DB lookup
   //                     failed), fall back to 150ms coalesced invalidation.
-  //   PositionUpdated — event carries unrealizedPnl/quantity/averagePrice; patch
+  //   PositionUpdated — event carries unrealizedPnl/quantity/averagePrice (and
+  //                     currentPrice/stopLoss/takeProfit when they change); patch
   //                     the cached entry in place (no _entity / no DB needed).
   //   PositionClosed  — remove by positionId; tombstone only, no DB needed.
   //   unknown types   — coalesced invalidation as safety net.
@@ -275,6 +264,9 @@ export function MarketDataBridge() {
                     unrealizedPnl: ev.unrealizedPnl ?? p.unrealizedPnl,
                     quantity: ev.quantity ?? p.quantity,
                     entryPrice: ev.averagePrice ?? p.entryPrice,
+                    currentPrice: ev.currentPrice ?? p.currentPrice,
+                    stopLoss: ev.stopLoss !== undefined ? ev.stopLoss : p.stopLoss,
+                    takeProfit: ev.takeProfit !== undefined ? ev.takeProfit : p.takeProfit,
                   }
                 : p,
             ),

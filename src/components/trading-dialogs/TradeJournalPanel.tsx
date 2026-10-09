@@ -2,17 +2,8 @@ import { useState } from "react";
 import { cn, formatCurrency, formatNumber, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { BookOpen, Star, Pencil, Trash2, Plus } from "lucide-react";
+import { EMOTIONS } from "./JournalEntryForm.tsx";
 
-const EMOTIONS = [
-  "Calm",
-  "Confident",
-  "Anxious",
-  "Greedy",
-  "Fearful",
-  "FOMO",
-  "Revenge",
-  "Bored",
-] as const;
 
 interface JournalEntry {
   id: string;

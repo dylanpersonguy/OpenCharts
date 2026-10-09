@@ -18,6 +18,7 @@ Advanced charting · full drawing-tool suite · 8 indicators · watchlist · dep
 - [Features](#features)
 - [Quick start](#quick-start)
 - [What's real and what's simulated](#whats-real-and-whats-simulated)
+- [Backtesting with bar replay](#backtesting-with-bar-replay)
 - [How it works](#how-it-works)
 - [Built on Lightweight Charts](#built-on-lightweight-charts)
 - [Project structure](#project-structure)
@@ -129,7 +130,7 @@ toolbar and removable individually or in bulk from the chart context menu.
 
 ## Quick start
 
-> Requires **Node 20+**.
+> Requires **Node 20+** (the bar-replay history scripts need **Node 22.18+**, which runs `.ts` files directly).
 
 ```bash
 npm install
@@ -160,13 +161,103 @@ marketing copy:
 | Bid/ask spread | **Derived** — synthesized around the replayed close |
 | DOM ladder sizes | **Synthetic** — random sizes around the real mid price |
 | Order fills, positions, P&L, margin | Real arithmetic against the in-browser engine |
-| Limit / stop orders | Accepted by the ticket but **fill immediately** — there is no resting-order book |
+| Limit / stop orders | Live demo: accepted but **fill immediately**. Bar replay: rest and fill when price reaches them |
 | Order modify / cancel-all | **No-ops** in the demo engine |
 | News tab | **Placeholder headlines**, not a live feed |
 | Economic calendar tab & technical-analysis gauge | TradingView embed widgets — real data, loaded from TradingView's CDN |
-| Trade journal, trade calculator, AI trader, session replay | **Present in the code but not reachable** — journal and replay are flagged off pending QA, the AI trader is a stub, the calculator is never mounted |
-| Account state (balance, positions, orders) | In-memory — **resets on reload** |
+| Bar replay history | **Real** — BTCUSD 15m from Binance; XAUUSD from files you import (see [Backtesting](#backtesting-with-bar-replay)) |
+| Live trade journal, trade calculator, AI trader | **Present in the code but not reachable** — the live journal is hidden (bar replay has its own), the AI trader is a stub, the calculator is never mounted |
+| Account state (balance, positions, orders) | Live demo: in-memory, **resets on reload**. Replay sessions: persisted in IndexedDB |
 | Drawings, chart prefs, templates, sound mute | Persisted in `localStorage` |
+
+## Backtesting with bar replay
+
+Open **Backtest** in the toolbar (or go to `/replay`) to practise on history the
+way FXReplay or TradingView's Bar Replay work: the chart is cut at a point in the
+past and you reveal it bar by bar while trading a separate paper account.
+
+### Sessions
+- Create as many named sessions as you like. Each has its own symbol (BTCUSD or
+  XAUUSD), starting balance, start date, spread, commission per lot per side and
+  leverage.
+- Everything persists in the browser (IndexedDB): balance, open positions,
+  pending orders, closed trades, the replay cursor, the chart timeframe and the
+  journal. Close the tab and resume later from the sessions list. Each session
+  also keeps its own chart drawings.
+- Deleting a session removes its trades, journal and drawings.
+
+### Replay controls
+- **Step** (`Shift+→`) reveals the next bar of the chart timeframe. Switch the
+  step size to "15m" to reveal one 15-minute bar at a time on any timeframe.
+- **Play/Pause** (`Shift+↓`) auto-steps at 0.5×–20× bars per second.
+- **Timeframes 15m, 30m, 1h, 4h, 1d, 1w**, switchable mid-session. Higher
+  timeframes are built from the 15m data, so the current bar shows partially
+  formed until its period is complete.
+- **Select bar** then click a candle to restart from there. You can also type a
+  date and press **Go**. Jumping forward trades through every bar in between, so
+  resting orders and stops still fill. Jumping back requires a flat account.
+- **End** closes everything at market and marks the session finished.
+
+### Trading and fills
+The normal order ticket, positions/orders/history tables, modify dialogs and
+SL/TP dragging on the chart all work in replay. Fills follow TradingView's rules:
+- Chart prices are **bid**; the ask is bid + the session spread. Buys fill at the
+  ask and sells at the bid.
+- Market orders fill at the current bar's close.
+- Limit and stop orders **rest** until price reaches them. Stop-loss and
+  take-profit close at their level.
+- Inside each 15m bar, price is assumed to move open → high → low → close if the
+  open is nearer the high, otherwise open → low → high → close. That decides
+  which of a stop and a target was hit first, and lets an order fill and get
+  stopped out in the same bar.
+- A level skipped over by a gap fills at the bar's open: worse for stops, better
+  for limits and targets.
+- Each closed trade records its exit reason (SL, TP, manual, stop-out), its
+  R-multiple (from the initial stop) and its maximum adverse and favourable
+  excursion (MAE/MFE).
+
+### Journal and stats
+- The **Journal** tab lists closed trades. For each one you can record a setup,
+  mistake tags (both lists are editable), an emotion, a 1–5 rating, free tags
+  and notes.
+- **Stats** (`/replay/:id/stats`) shows net P&L, win rate, profit factor,
+  expectancy, average R, average and largest win/loss, max drawdown, the equity
+  curve, and breakdowns by setup, mistake and side, plus the full trade log with
+  your notes.
+
+### Getting the history
+Replay data lives in `public/history/` (gitignored) as compact yearly binary
+files plus a `manifest.json`, loaded on demand by the browser. It needs a
+one-time setup:
+
+```bash
+npm run fetch:history          # BTCUSD 15m from Binance, Aug 2017 → now (~7.5 MB, ~2 min)
+```
+
+Re-run it any time to top up the current year.
+
+**Gold (XAUUSD)** isn't downloaded automatically, because Dukascopy blocks
+scripted downloads. Download 1-minute files yourself, then import them:
+
+1. Get the data. Either source works, and you can mix them:
+   - [histdata.com](https://www.histdata.com/): *Download Free Forex Data* →
+     XAUUSD → format **Generic ASCII**, **1 Minute Bar Quotes**. Download each
+     year (and the current year's monthly files) and unzip them. Rows look like
+     `20240102 170000;2063.120;…`, in EST without daylight saving; the importer
+     converts them to UTC.
+   - Dukascopy's *Historical Data Export*: XAU/USD, 1 minute (or 15 minutes),
+     **BID**, CSV. GMT or Local time both work.
+2. Put the `.csv`/`.txt` files (gzipped `.gz` is fine) in `history-import/XAUUSD/`.
+3. Run `npm run import:history -- --symbol XAUUSD` (add `--dir <folder>` to read
+   from elsewhere).
+
+The importer builds 15m UTC bars and merges them into any existing years; newer
+imports replace overlapping bars, so re-running with more files is safe. If a row
+isn't recognised it stops and names the file and line. Reload `/replay`
+afterwards.
+
+**Daily bars** are cut at 00:00 UTC, not the 17:00 New York close many forex
+brokers use, so gold daily candles won't match a broker chart exactly.
 
 ## How it works
 
@@ -272,9 +363,11 @@ src/
 ├─ pages/
 │  ├─ TradingPage.tsx       # the full terminal layout (~700 lines)
 │  ├─ AiTraderPage.tsx      # stub — the AI trader is gated off
-│  └─ trading/              # chart, toolbars, order panel, DOM, watchlist,
-│                           #   drawing rail, object tree, replay HUD/scrubber,
-│                           #   news overlay, indicators, challenge levels
+│  ├─ trading/              # chart, toolbars, order panel, DOM, watchlist,
+│  │                        #   drawing rail, object tree, news overlay,
+│  │                        #   indicators, challenge levels
+│  └─ replay/               # bar replay: sessions list, replay terminal + controls,
+│                           #   journal panel, stats page
 ├─ lib/
 │  ├─ chart-plugins/        # lightweight-charts plugins used by the chart
 │  │  ├─ drawing-tools/      #   manager, renderers, hit-testing, geometry, alerts
@@ -294,11 +387,17 @@ src/
 │  ├─ queries.ts            # TanStack Query hooks
 │  ├─ store.tsx             # zustand stores (auth + trading state)
 │  ├─ schemas.ts            # zod schemas / shared types
-│  └─ demo/                 # engine, feed, candles, bus, instruments, bundled data
+│  ├─ demo/                 # engine, feed, candles, bus, instruments, bundled data,
+│  │                        #   replay-router (routes api calls to a replay session)
+│  └─ replay/               # bar replay: data/ (history codec, loader, aggregation,
+│                           #   CSV import), engine/ (pure fill engine), controller,
+│                           #   persistence/ (IndexedDB), stats
 ├─ __tests__/               # Vitest unit tests
 └─ styles/
 scripts/
-└─ fetch-demo-data.mjs      # refresh the bundled real OHLC
+├─ fetch-demo-data.mjs      # refresh the bundled real OHLC
+├─ fetch-history.ts         # download BTCUSD replay history
+└─ import-history.ts        # import XAUUSD (or other) CSV history
 ```
 
 ## Building on OpenCharts
@@ -361,13 +460,15 @@ six plugins are the reference implementations.
 
 ### Gotchas worth knowing
 
-- **`api` swallows unknown methods.** [`services/api.ts`](src/services/api.ts)
-  wraps the demo table in a `Proxy` that resolves *any* unimplemented method to
-  `null`. A typo'd method name fails silently instead of throwing — check
-  `services/demo/api.ts` when a call mysteriously returns nothing.
-- **Flags gate whole panels.** `REPLAY_ENABLED` in `pages/trading/constants.ts`
-  hides the replay HUD and scrubber; the journal tab is commented out in
-  `BottomPanel.tsx`; the AI trader is a `null`-returning stub.
+- **`api` is typed as the demo table.** [`services/api.ts`](src/services/api.ts)
+  is `typeof demoApi`, so calling a method the demo doesn't declare is a compile
+  error. At runtime a `Proxy` still resolves unknown methods to `null`.
+- **Replay plugs into the same `api`.** Trading calls are routed by
+  account/position/order id to the open replay session
+  (`services/demo/replay-router.ts`), so UI that works live works in replay.
+  Keep new trading methods routable the same way.
+- **Gated panels.** The live journal tab is hidden in `BottomPanel.tsx`; the AI
+  trader is a `null`-returning stub.
 - **React runs in `StrictMode`**, so chart effects mount twice in development —
   every series, primitive and subscription needs a working cleanup path.
 - **The demo engine is in-memory.** Anything you want to survive a reload has to
@@ -442,6 +543,8 @@ network requests. Drop those components if you want a strictly offline build.
 | `npm run test:watch` | Run tests in watch mode |
 | `npm run lint` | Runs `eslint src/` — ESLint is **not** currently a declared dependency, so install it first |
 | `node scripts/fetch-demo-data.mjs` | Refresh bundled real OHLC |
+| `npm run fetch:history` | Download BTCUSD 15m bar-replay history into `public/history/` |
+| `npm run import:history -- --symbol XAUUSD` | Import downloaded 1m/15m CSVs from `history-import/XAUUSD/` |
 
 ## Tech stack
 
@@ -454,16 +557,17 @@ network requests. Drop those components if you want a strictly offline build.
 - **Vitest** + **Testing Library** for tests
 - Optional **posthog-js** analytics, off unless a key is set
 
-`package.json` also declares `framer-motion`, `html-to-image`,
-`@tanstack/react-virtual` and `react-router-dom`; the first three are unused and
-React Router only supplies a `BrowserRouter` wrapper — there are no routes.
+`package.json` also declares `framer-motion`, `html-to-image` and
+`@tanstack/react-virtual`, which are unused. React Router drives `/` and the
+`/replay` pages.
 
 ## Known limitations
 
-- **No resting orders.** The demo engine fills every ticket immediately; limit
-  and stop prices are accepted but not worked. `modifyOrder` and
-  `cancelAllOrders` are no-ops.
-- **Account state is ephemeral** — positions, orders and balance reset on reload.
+- **No resting orders in the live demo.** The live engine fills every ticket
+  immediately; limit and stop prices are accepted but not worked, and
+  `cancelAllOrders` is a no-op. Bar replay has a full resting-order engine.
+- **Live account state is ephemeral**: positions, orders and balance reset on
+  reload. Replay sessions persist.
   Drawings, chart preferences and templates persist via `localStorage`.
 - **Timeline is normalized** — bundled history is shifted so the latest bar is
   "now", and the tick replay loops when it reaches the end of the 1m series.
@@ -472,13 +576,19 @@ React Router only supplies a `BrowserRouter` wrapper — there are no routes.
   order book in the bundled data.
 - **Crypto-only demo symbols** out of the box (the data source is Binance). Wire
   your own adapter for FX, futures or equities.
-- **Dormant code from the original platform** ships in the repo: session replay
-  (`REPLAY_ENABLED = false`), the trade journal (hidden pending QA), the trade
+- **Replay history needs a one-time download** (`npm run fetch:history`) and,
+  for gold, files you import yourself. Without it `/replay` shows setup
+  instructions. Deploying a static build with replay means shipping
+  `public/history/` (~8 MB for BTCUSD).
+- **Dormant code from the original platform** ships in the repo: the live trade
+  journal (hidden pending QA), the trade
   calculator (never mounted), the AI trader (stubbed), challenge/risk-rule price
   levels (inert because the demo account reports no risk limits), unused
   marketing assets under `public/`, and four dependencies nothing imports.
-- **Thin test coverage** — the Vitest suite covers `lib/utils` and the button
-  component only. Playwright is a declared dev dependency but no end-to-end
+- **Test coverage is uneven.** The bar-replay modules (history codec and
+  aggregation, CSV import, fill engine, controller, persistence, stats, hotkeys)
+  are unit-tested; the live terminal is covered only for `lib/utils` and the
+  button component. Playwright is a declared dev dependency but no end-to-end
   specs are checked in.
 - The production `build` runs Vite only; run `npm run typecheck` separately for
   full type checking.

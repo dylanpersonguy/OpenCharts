@@ -1,5 +1,7 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { FlaskConical } from "lucide-react";
 import { useIsFeedConnected } from "../components/ConnectionIndicator.tsx";
 import { MobileAccountBar, MobileTradingPanel } from "../components/MobileTradingPanel.tsx";
 import {
@@ -32,25 +34,22 @@ import {
   useUpdateJournalEntry,
 } from "../services/queries.ts";
 import type { Order, PlaceOrderInput, Position, Symbol } from "../services/schemas.ts";
-import { useTradingStore } from "../services/store.tsx";
+import { useTradingStore, type TickEntry } from "../services/store.tsx";
 import { toast } from "../services/toast.ts";
 import { AiTraderPanel } from "./AiTraderPage.tsx";
+import type { ReplayBindings } from "./replay/types.ts";
 import { BottomPanel } from "./trading/BottomPanel.tsx";
 import { ChartPanel } from "./trading/ChartPanel.tsx";
 import { ChartToolbar } from "./trading/ChartToolbar.tsx";
 import {
   type DrawingTool,
   type MagnetMode,
-  REPLAY_ENABLED,
   TIMEFRAMES,
   type Timeframe,
 } from "./trading/constants.ts";
 import { DOMPanel } from "./trading/DOMPanel.tsx";
 import { MarketClosedBanner } from "./trading/MarketClosedBanner.tsx";
 import { OrderPanel } from "./trading/OrderPanel.tsx";
-import { ReplayScrubber } from "./trading/ReplayScrubber.tsx";
-import { useReplayChartData } from "./trading/useReplayChartData.ts";
-import { useReplayPlayback } from "./trading/useReplayPlayback.ts";
 import { getPipDigits } from "./trading/utils.ts";
 import { WatchlistPanel } from "./trading/WatchlistPanel.tsx";
 
@@ -76,8 +75,16 @@ function getErrorMessage(err: unknown): string {
   return "Request failed";
 }
 
-export function TradingPage() {
+const NO_TICKS: Record<string, TickEntry> = {};
+
+interface TradingPageProps {
+  /** Run the terminal against a bar-replay session instead of the live feed. */
+  replay?: ReplayBindings;
+}
+
+export function TradingPage({ replay }: TradingPageProps = {}) {
   const hasTrackedFirstTrade = useRef(false);
+  const isReplay = replay !== undefined;
 
   const handleFirstTrade = useCallback(() => {
     if (!hasTrackedFirstTrade.current) {
@@ -86,27 +93,38 @@ export function TradingPage() {
     }
   }, []);
 
-  const {
-    selectedSymbol,
-    setSelectedSymbol,
-    ticks,
-    updateTick,
-    activeAccountId,
-    symbols: _storeSymbols,
-    replayVersion,
-    isReplaying,
-  } = useTradingStore();
+  // Selectors (not the whole store) so live ticks don't re-render the page in replay.
+  const storeSymbol = useTradingStore((s) => s.selectedSymbol);
+  const setStoreSymbol = useTradingStore((s) => s.setSelectedSymbol);
+  const liveTicks = useTradingStore((s) => (isReplay ? NO_TICKS : s.ticks));
+  const updateTick = useTradingStore((s) => s.updateTick);
+  const liveAccountId = useTradingStore((s) => s.activeAccountId);
+  const selectedSymbol = replay?.symbol ?? storeSymbol;
+  const setSelectedSymbol = useCallback(
+    (symbol: string) => {
+      if (!isReplay) setStoreSymbol(symbol);
+    },
+    [isReplay, setStoreSymbol],
+  );
+  const ticks = replay?.ticks ?? liveTicks;
+  const activeAccountId = replay?.accountId ?? liveAccountId;
   // Chart timeframe persistence (#8)
-  const [timeframe, setTimeframe] = useState<Timeframe>(() => {
+  const [liveTimeframe, setTimeframe] = useState<Timeframe>(() => {
     const saved = localStorage.getItem(`tf_${selectedSymbol}`);
     return saved && TIMEFRAMES.includes(saved as Timeframe) ? (saved as Timeframe) : "15m";
   });
+  const timeframe = replay?.timeframe ?? liveTimeframe;
+  const replayTimeframeChange = replay?.onTimeframeChange;
   const handleTimeframeChange = useCallback(
     (tf: Timeframe) => {
+      if (replayTimeframeChange) {
+        replayTimeframeChange(tf);
+        return;
+      }
       setTimeframe(tf);
       localStorage.setItem(`tf_${selectedSymbol}`, tf);
     },
-    [selectedSymbol],
+    [selectedSymbol, replayTimeframeChange],
   );
   // Restore timeframe when symbol changes
   useEffect(() => {
@@ -125,7 +143,7 @@ export function TradingPage() {
     clearDrawings,
     undo: undoDrawing,
     redo: redoDrawing,
-  } = useChartDrawings(selectedSymbol, timeframe);
+  } = useChartDrawings(replay?.drawingsKey ?? selectedSymbol, timeframe);
   const [activePlugins, setActivePlugins] = useState<string[]>(
     () => getChartPreferencesFromStorage().activePlugins,
   );
@@ -219,12 +237,16 @@ export function TradingPage() {
   const [confirmLoading, setConfirmLoading] = useState(false);
 
   const queryClient = useQueryClient();
-  const { data: symbols = [] } = useSymbols();
-  const isFeedConnected = useIsFeedConnected();
+  const { data: liveSymbols = [] } = useSymbols();
+  const symbols = replay?.symbols ?? liveSymbols;
+  const liveFeedConnected = useIsFeedConnected();
+  // Replay prices come from the session, never from the live socket.
+  const isFeedConnected = isReplay || liveFeedConnected;
 
   // Prime the active symbol with a fresh server-side snapshot immediately on
   // symbol switch so bid/ask appears without waiting for the next WS tick.
   useEffect(() => {
+    if (isReplay) return;
     let cancelled = false;
     void api
       .getTick(selectedSymbol)
@@ -243,7 +265,7 @@ export function TradingPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedSymbol, updateTick]);
+  }, [selectedSymbol, updateTick, isReplay]);
 
   // Handler for chart drag-to-edit SL/TP levels
   const handleChartModifyPosition = useCallback(
@@ -360,18 +382,14 @@ export function TradingPage() {
       window.clearTimeout(timer);
     };
   }, [selectedSymbol, timeframe, firstPaintCandleLimit, deepCandleLimit]);
-  const { data: candles = [] } = useCandles(selectedSymbol, timeframe, candleLimit, replayVersion);
-  // Replay: sliced 1m buffer + trade-event markers; null when not replaying.
-  // While replayCandles is set, the live tick/candle feed is suppressed below
-  // so real-time data can't paint over the playback.
-  const { replayCandles, replayTradeEvents } = useReplayChartData(activeAccountId);
+  const { data: liveCandles = [] } = useCandles(selectedSymbol, timeframe, candleLimit, { enabled: !isReplay });
+  const candles = replay?.candles ?? liveCandles;
   const chartPrefs = useChartPreferences();
   const cycleMagnetMode = useCallback(() => {
     const order: MagnetMode[] = ["none", "weak", "strong"];
     const next = order[(order.indexOf(chartPrefs.magnetMode) + 1) % order.length] ?? "none";
     updateChartPreferences({ magnetMode: next });
   }, [chartPrefs.magnetMode]);
-  useReplayPlayback(activeAccountId ?? "");
   const { data: positions = [] } = usePositions(activeAccountId);
   const { data: orders = [] } = useOrders(activeAccountId);
   const chartPositions = chartPrefs.overlayPositionsOnChart ? positions : [];
@@ -388,12 +406,14 @@ export function TradingPage() {
   const deleteJournal = useDeleteJournalEntry();
 
   // Get account data for risk display
-  const account = useTradingStore((s) => s.accounts.find((a) => a.id === activeAccountId));
+  const liveAccount = useTradingStore((s) => s.accounts.find((a) => a.id === activeAccountId));
+  const account = replay?.account ?? liveAccount;
 
   const tick = ticks[selectedSymbol];
   const symbolInfo = symbols.find((s) => s.name === selectedSymbol) as Symbol | undefined;
-  const liveCandleUpdates = useTradingStore((s) => s.liveCandleUpdates);
-  const liveCandle = liveCandleUpdates[`${selectedSymbol}:${timeframe}`];
+  const liveCandle = useTradingStore((s) =>
+    isReplay ? undefined : s.liveCandleUpdates[`${selectedSymbol}:${timeframe}`],
+  );
   const pipDigits = useMemo(
     () => getPipDigits(symbolInfo, selectedSymbol),
     [symbolInfo, selectedSymbol],
@@ -442,8 +462,6 @@ export function TradingPage() {
         tick={tick}
         symbolInfo={symbolInfo}
         aiTraderEnabled={aiTraderEnabled?.enabled ?? false}
-        isReplaying={isReplaying}
-        replayAccountId={activeAccountId}
         activePlugins={activePlugins}
         onTogglePlugin={handleTogglePlugin}
         onSetIndicators={setActiveIndicators}
@@ -454,9 +472,23 @@ export function TradingPage() {
         onToggleStayInDrawingMode={() =>
           updateChartPreferences({ stayInDrawingMode: !chartPrefs.stayInDrawingMode })
         }
+        timeframes={replay?.timeframes}
+        symbolLocked={isReplay}
+        navSlot={
+          replay?.nav ?? (
+            <Link
+              to="/replay"
+              className="flex items-center gap-1 px-2 py-1 rounded text-xs text-muted-foreground hover:bg-secondary hover:text-foreground shrink-0"
+              title="Backtest with bar replay"
+            >
+              <FlaskConical className="h-3 w-3" />
+              <span className="hidden md:inline">Backtest</span>
+            </Link>
+          )
+        }
       />
 
-      <MarketClosedBanner symbolInfo={symbolInfo} />
+      {replay ? replay.controls : <MarketClosedBanner symbolInfo={symbolInfo} />}
 
       {/* ── Main Layout ──────────────────────────────────── */}
       <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
@@ -465,9 +497,9 @@ export function TradingPage() {
           {/* Chart Area */}
           <div className="flex-1 min-h-[200px] relative">
             <ChartPanel
-              candles={replayCandles ?? candles}
+              candles={candles}
               selectedSymbol={selectedSymbol}
-              timeframe={replayCandles ? "1m" : timeframe}
+              timeframe={timeframe}
               isDark={isDark}
               activeIndicators={activeIndicators}
               drawingTool={drawingTool}
@@ -483,13 +515,11 @@ export function TradingPage() {
               stayInDrawingMode={chartPrefs.stayInDrawingMode}
               positions={chartPositions}
               orders={chartOrders}
-              tick={replayCandles ? undefined : tick}
-              liveCandle={replayCandles ? undefined : liveCandle}
+              tick={tick}
+              liveCandle={liveCandle}
               pipDigits={pipDigits}
               symbolInfo={symbolInfo}
               onModifyPosition={handleChartModifyPosition}
-              replayTradeEvents={replayTradeEvents}
-              isReplaying={isReplaying}
               activePlugins={activePlugins}
               onTogglePlugin={handleTogglePlugin}
               accountEquity={account?.equity ?? account?.balance ?? 0}
@@ -497,13 +527,12 @@ export function TradingPage() {
               onQuickOrder={handleQuickOrder}
               onClearDrawings={clearDrawings}
               onClearIndicators={handleClearIndicators}
+              isReplaying={isReplay}
+              replayTradeEvents={replay?.tradeMarkers}
+              onChartClick={replay?.onChartClick}
+              dataResetKey={replay ? `${replay.sessionId}:${replay.viewKey}` : undefined}
             />
           </div>
-
-          {/* Replay timeline scrubber — disabled until the feature is QA'd */}
-          {REPLAY_ENABLED && isReplaying && activeAccountId != null && (
-            <ReplayScrubber accountId={activeAccountId} />
-          )}
 
           {/* ── Resize Handle ── */}
           <div
@@ -528,6 +557,8 @@ export function TradingPage() {
             aiTraderEnabled={aiTraderEnabled?.enabled ?? false}
             height={bottomPanelHeight}
             isFeedConnected={isFeedConnected}
+            ticks={isReplay ? ticks : undefined}
+            journalSlot={replay?.journal}
             journalEntries={journalData?.entries || []}
             journalLoading={journalLoading}
             onCreateJournal={(data: CreateJournalEntryInput) =>
