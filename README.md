@@ -57,8 +57,8 @@ It's useful as:
 
 - A **standalone charting / paper-trading app** you can host on any static host.
 - A **reference terminal UI** you can point at your own market-data and trading
-  backend — the data layer is isolated behind two modules
-  (see [Bring your own data](#bring-your-own-data--backend)).
+  backend — implement one adapter interface, no fork required
+  (see [Integrating OpenCharts](#integrating-opencharts)).
 - A **learning sandbox** for charting, technical drawing and order management.
 
 The codebase was extracted from a closed-source prop-trading platform, so a few
@@ -152,6 +152,17 @@ toolbar and removable individually or in bulk from the chart context menu.
 
 ### Use it in your app
 
+> **Not on npm yet.** The package is ready to publish but has not been
+> released. Until it is, build the tarball from a clone and install that:
+>
+> ```bash
+> npm install && npm run build:lib && npm pack
+> # then, in your app:
+> npm install /path/to/OpenCharts/dylanpersonguy-opencharts-0.3.0.tgz
+> ```
+>
+> Once it is published, this becomes:
+
 ```bash
 npm install @dylanpersonguy/opencharts
 ```
@@ -229,45 +240,55 @@ and those resolve against whichever `OpenChartsAdapter` is installed. The
 bundled demo backend is simply the adapter that ships by default:
 
 ```
-                ┌─────────────────────────────────────────────┐
-                │                Terminal UI                    │
-                │  ChartPanel · OrderPanel · DOM · Watchlist     │
-                └───────────────┬───────────────┬──────────────┘
-                                │ api.*          │ wsClient.subscribe()
-                ┌───────────────▼───────┐ ┌──────▼───────────────┐
-                │   services/api.ts      │ │   services/ws.ts      │
-                │  (REST-shaped facade)  │ │  (streaming client)   │
-                └───────────────┬───────┘ └──────┬───────────────┘
-                                │                 │
-                ┌───────────────▼─────────────────▼───────────────┐
-                │                services/demo/                    │
-                │  api.ts      demo method table (+ benign fallback)│
-                │  engine.ts   paper trading (positions, P&L, SL/TP)│
-                │  feed.ts     replays real ticks → bus → store     │
-                │  candles.ts  serves bundled OHLC (shifted to now) │
-                │  bus.ts      in-process pub/sub                   │
-                │  instruments.ts / data/  real OHLC + symbol specs │
-                └──────────────────────────────────────────────────┘
+                ┌─────────────────────────────────────────────────────────┐
+                │                    Terminal UI                          │
+                │     Chart · OrderTicket · DOM · Watchlist · …           │
+                └─────────────┬─────────────────────────────┬─────────────┘
+                              │ api.*                       │ wsClient.subscribe()
+                ┌─────────────▼─────────────┐ ┌─────────────▼─────────────┐
+                │   services/api.ts         │ │   services/ws.ts          │
+                │   (internal facade)       │ │   (adapter events →       │
+                │                           │ │    terminal channels)     │
+                └─────────────┬─────────────┘ └─────────────┬─────────────┘
+                              │                             │
+                ┌─────────────▼─────────────────────────────▼─────────────┐
+                │   OpenChartsAdapter  (adapter/types.ts)                 │
+                │   marketData · trading? · storage?                      │
+                │   installed by <OpenChartsProvider adapter={…}>         │
+                └─────────────┬───────────────────────────────────────────┘
+                              │ default: createDemoAdapter()
+                ┌─────────────▼───────────────────────────────────────────┐
+                │   adapter/demo.ts  →  services/demo/                    │
+                │   engine.ts    paper trading (positions, P&L, SL/TP)    │
+                │   feed.ts      replays real ticks as a live stream      │
+                │   candles.ts   serves bundled OHLC (shifted to now)     │
+                │   bus.ts       in-process pub/sub                       │
+                │   instruments.ts / data/   real OHLC + symbol specs     │
+                └─────────────────────────────────────────────────────────┘
 ```
 
+- **`services/api.ts`** — the internal facade every component reads and writes
+  through. Each method resolves against the installed adapter, mapping the
+  small public `OpenChartsAdapter` contract onto the calls the UI makes.
+- **`services/ws.ts`** — subscribes to the adapter's market-data and trading
+  streams and republishes them on the four channels the terminal consumes
+  (`market-data`, `positions`, `orders`, `account`). It also owns the
+  connection lifecycle.
+- **`adapter/demo.ts`** — the bundled backend expressed through the public
+  contract, and the reference implementation for writing your own.
 - **`services/demo/engine.ts`** — the paper-trading engine and single source of
-  truth for the account, positions and orders. It marks positions to market and
-  publishes the same position / order / equity events the UI already consumed.
+  truth for the demo account, positions and orders. It marks positions to
+  market on every tick.
 - **`services/demo/feed.ts`** — replays the bundled 1-minute closes for every
   symbol as a forward-moving tick stream, every 600 ms, and drives
   `engine.mark()`.
 - **`services/demo/candles.ts`** — serves the bundled history, time-shifted so
   the most recent bar aligns to "now" (OHLC values stay real; only the timeline
   is normalized).
-- **`services/api.ts`** — wraps the demo method table in a `Proxy` whose fallback
-  resolves any unimplemented method to `null`, so leftover calls from the
-  platform this was extracted from never throw.
-- **`services/ws.ts`** — exposes the same `connect` / `subscribe` /
-  `subscribeAccounts` / `onStateChange` surface as the original reconnecting
-  WebSocket client, backed by the in-process bus.
 
-Because the data layer sits behind a stable interface, **no UI component had to
-change** to run without a server.
+Because the UI only ever sees `api` and `wsClient`, swapping the demo for a real
+backend is a matter of installing a different adapter — **no UI component
+changes**.
 
 ## Built on Lightweight Charts
 
@@ -321,11 +342,14 @@ yourself.
 
 ```
 src/
-├─ App.tsx                  # boots the demo session, renders the terminal
-├─ main.tsx                 # React entry, providers, MarketDataBridge, chunk-reload guard
+├─ index.ts                 # the package's main entry (provider, terminal, panels, types)
+├─ demo.ts                  # the "/demo" entry: createDemoAdapter()
+├─ notifications.ts         # onNotification(), the public notification stream
+├─ main.tsx                 # hosted-demo entry: mounts Root, chunk-reload guard
+├─ Root.tsx                 # hosted-demo root: installs an adapter, renders <Terminal />
+├─ vendor/                  # types inlined from the original platform's shared package
 ├─ pages/
 │  ├─ TradingPage.tsx       # the default layout, composed from the panels
-│  ├─ AiTraderPage.tsx      # stub — the AI trader is gated off
 │  └─ trading/              # chart, toolbars, order panel, DOM, watchlist,
 │                           #   drawing rail, object tree, replay HUD/scrubber,
 │                           #   news overlay, indicators, challenge levels
@@ -342,15 +366,19 @@ src/
 ├─ terminal/               # composable terminal pieces
 │  ├─ context.tsx          #   <TerminalProvider>: the state the panels share
 │  ├─ panels.tsx           #   <Chart>, <OrderTicket>, <Positions>, …
+│  ├─ use-terminal.ts      #   useTerminal(), for panels you write yourself
 │  └─ Terminal.tsx         #   the full terminal in its default layout
 ├─ adapter/                # the public integration surface
 │  ├─ types.ts             #   the OpenChartsAdapter contract
 │  ├─ provider.tsx         #   <OpenChartsProvider adapter={...}>
+│  ├─ registry.ts          #   the installed adapter, read by api / wsClient
 │  ├─ demo.ts              #   the bundled backend, as a reference adapter
 │  └─ conformance.ts       #   a test suite adapter authors can run
 ├─ services/
 │  ├─ api.ts                # internal facade, resolves against the adapter
 │  ├─ ws.ts                 # adapter events → the terminal's channels
+│  ├─ replay.ts             # session-replay buffer and transport state
+│  ├─ toast.ts              # notification stream behind onNotification()
 │  ├─ api/                  # legacy HTTP clients from the original platform;
 │  │                        #   chart-templates.ts is localStorage-backed and live
 │  ├─ queries.ts            # TanStack Query hooks
@@ -415,17 +443,19 @@ periods). Add an indicator there and the guards apply automatically.
 
 ### Quality gates
 
-All four are expected to pass before a PR, and all four pass on `main`:
+All seven are expected to pass before a PR, and all seven pass on `main`:
 
 ```bash
-npm run typecheck   # tsc --noEmit, strict, zero errors
-npm run lint        # ESLint 9 flat config, zero errors *and* zero warnings
-npm run test        # Vitest — 166 tests
-npm run build       # production bundle
-npm run check:size  # first-load payload budget
+npm run typecheck      # tsc --noEmit, strict, zero errors
+npm run lint           # ESLint 9 flat config, zero errors *and* zero warnings
+npm run test           # Vitest — 200 tests
+npm run build          # production bundle
+npm run check:size     # first-load payload budget
+npm run build:lib      # the npm package; fails if any CSS escapes the scope
+npm run check:package  # the built package matches its exports
 ```
 
-GitHub Actions runs all five on every pull request (`.github/workflows/ci.yml`),
+GitHub Actions runs all seven on every pull request (`.github/workflows/ci.yml`),
 with lint under `--max-warnings=0`. The size gate exists because the first-load
 payload was 4.94 MB before the candle data was made lazy — see
 [`scripts/check-bundle-size.mjs`](scripts/check-bundle-size.mjs).
@@ -440,9 +470,10 @@ margin maths and rounding are covered in
   selected symbol, live ticks).
 - **TanStack Query** (`services/queries.ts`) — everything fetched through `api`,
   keyed by `queryKeys`.
-- **The demo bus** (`services/demo/bus.ts`) — `market-data`, `positions`,
-  `orders` and `account` events; `components/MarketDataBridge.tsx` is the single
-  place they land in React.
+- **The channel bus** (`services/demo/bus.ts`) — `services/ws.ts` republishes
+  adapter events on the `market-data`, `positions`, `orders` and `account`
+  channels; `components/MarketDataBridge.tsx`, mounted by the provider, is the
+  single place they land in React.
 - **`localStorage`** — drawings (`oc_drawings_<SYMBOL>`), chart templates
   (`oc_chart_templates`), chart and trader preferences (`trader_prefs`, scoped
   per user id) and the sound mute flag (`tradeSoundMuted`). Chart preference
@@ -451,10 +482,10 @@ margin maths and rounding are covered in
 
 ### Gotchas worth knowing
 
-- **`api` is typed exactly.** [`services/api.ts`](src/services/api.ts) exposes
-  the demo table's real signatures, so calling a method it does not implement is
-  a compile error rather than a silent `null`. The `Proxy` underneath is only a
-  runtime net for dynamic access, and warns in development when it fires.
+- **`api` is typed exactly.** [`services/api.ts`](src/services/api.ts) is a
+  plain object with real signatures, so calling a method it does not implement
+  is a compile error. New backend capabilities belong in the adapter contract
+  (`adapter/types.ts`) first, then a facade method that maps onto it.
 - **Candle data loads lazily.** `services/demo/candles.ts` imports each
   `<SYMBOL>_<tf>.json` on demand, so `getHistory` is async and the feed primes
   the 1m series before it starts ticking.
@@ -741,24 +772,24 @@ Good places to start:
 
 - **Indicators and drawing tools** — the two most self-contained additions; see
   [Building on OpenCharts](#building-on-opencharts).
-- **A real resting-order book** in the demo engine, so limit and stop orders
-  actually work.
 - **Persistence for the paper account**, so a session survives a reload.
-- **Data adapters** for other exchanges or brokers, behind the existing
-  `api` / `wsClient` interfaces.
+- **Data adapters** for other exchanges or brokers, written against the
+  `OpenChartsAdapter` contract — [`examples/binance-adapter/`](examples/binance-adapter/)
+  is the template, and the conformance suite tells you when it is right.
 - **Themes and layout customization** — the chart palette lives in
   `pages/trading/constants.ts` and the design tokens in `tailwind.config.js`.
 - **Finishing or removing the dormant panels** listed under
   [Known limitations](#known-limitations).
 - **Tests, docs and bug reports** — coverage is thin and every report helps.
 
-[`CONTRIBUTING.md`](CONTRIBUTING.md) covers setup, the four CI gates, the layout
+[`CONTRIBUTING.md`](CONTRIBUTING.md) covers setup, the CI gates, the layout
 of the codebase and what makes a reviewable PR. Please also read the
 [Code of Conduct](CODE_OF_CONDUCT.md), and report security issues privately via
 [`SECURITY.md`](SECURITY.md) rather than in a public issue.
 
-The one architectural rule: keep changes behind the `api` / `wsClient`
-interfaces so the terminal stays backend-agnostic.
+The one architectural rule: UI code talks to `api` and `wsClient`, never to an
+adapter or the demo layer directly, and backends plug in only through the
+`OpenChartsAdapter` contract. That is what keeps the terminal backend-agnostic.
 
 ## Acknowledgements
 

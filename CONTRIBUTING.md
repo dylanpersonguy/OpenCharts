@@ -18,7 +18,7 @@ npm run dev
 The terminal boots straight into a funded paper-trading session against bundled
 market data. There is no backend to run and nothing to configure.
 
-## The four gates
+## The gates
 
 CI runs these on every pull request, and they all pass on `main`. Run them
 before you push:
@@ -56,12 +56,16 @@ The README has a full tour, but the short version:
 | `src/pages/trading/` | The terminal: chart, toolbars, order ticket, DOM, watchlist, replay |
 | `src/lib/chart-plugins/` | lightweight-charts primitives and the custom drawing engine |
 | `src/lib/indicators.ts` | Indicator maths — pure functions over candle arrays |
-| `src/services/` | The `api` / `wsClient` boundary and the in-browser demo layer behind it |
+| `src/adapter/` | The public `OpenChartsAdapter` contract, provider, demo adapter and conformance suite |
+| `src/terminal/` | `<Terminal />`, `<TerminalProvider>` and the composable panels |
+| `src/services/` | The internal `api` / `wsClient` facade and the in-browser demo backend |
 | `src/__tests__/` | Vitest suites |
 
 **The one architectural rule**: UI code talks to `api` and `wsClient`, never to
-the demo layer directly. That boundary is what lets people point OpenCharts at
-their own backend, so please keep changes on the right side of it.
+an adapter or the demo layer directly, and backends plug in only through the
+`OpenChartsAdapter` contract in `src/adapter/types.ts`. That boundary is what
+lets people point OpenCharts at their own backend without forking, so please
+keep changes on the right side of it.
 
 ## Good first contributions
 
@@ -73,7 +77,9 @@ their own backend, so please keep changes on the right side of it.
   section.
 - **Themes.** The chart palette is in `pages/trading/constants.ts`, design
   tokens in `tailwind.config.js`.
-- **Data adapters** for other exchanges or brokers, behind `api` / `wsClient`.
+- **Data adapters** for other exchanges or brokers, written against
+  `OpenChartsAdapter`. Start from `examples/binance-adapter/` and verify with
+  `runAdapterConformance` from `@dylanpersonguy/opencharts/conformance`.
 - **Bug reports.** Genuinely useful. Include what you expected and what happened.
 
 ## Pull requests
