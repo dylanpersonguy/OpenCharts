@@ -140,6 +140,70 @@ export function resolveEntry(d: DrawingLine, ctx: ResolveCtx, state: EntryState)
   if (d.type === "position") {
     entry.yStop = d.stopPrice != null ? ctx.series.priceToCoordinate(d.stopPrice) : null;
     entry.yTarget = d.targetPrice != null ? ctx.series.priceToCoordinate(d.targetPrice) : null;
+
+    if (ctx.data.length > 0 && d.time != null) {
+      const tStart = Math.min(d.time, d.time2 ?? d.time);
+      const tEnd = Math.max(d.time, d.time2 ?? d.time);
+      const isLong = d.side !== "short";
+
+      let trackingPrice: number | null = null;
+      let trackingTime: number | null = null;
+      let trackingStatus: "ACTIVE" | "CLOSED" = "ACTIVE";
+
+      for (let i = 0; i < ctx.data.length; i++) {
+        const bar = ctx.data[i] as { time: Time; open?: number; high?: number; low?: number; close?: number };
+        const bTime = bar.time as number;
+        if (bTime < tStart) continue;
+        if (bTime > tEnd) break;
+
+        const high = typeof bar.high === "number" ? bar.high : bar.close ?? d.price;
+        const low = typeof bar.low === "number" ? bar.low : bar.close ?? d.price;
+        const close = typeof bar.close === "number" ? bar.close : d.price;
+
+        if (isLong) {
+          if (d.targetPrice != null && high >= d.targetPrice) {
+            trackingPrice = d.targetPrice;
+            trackingTime = bTime;
+            trackingStatus = "CLOSED";
+            break;
+          }
+          if (d.stopPrice != null && low <= d.stopPrice) {
+            trackingPrice = d.stopPrice;
+            trackingTime = bTime;
+            trackingStatus = "CLOSED";
+            break;
+          }
+        } else {
+          if (d.targetPrice != null && low <= d.targetPrice) {
+            trackingPrice = d.targetPrice;
+            trackingTime = bTime;
+            trackingStatus = "CLOSED";
+            break;
+          }
+          if (d.stopPrice != null && high >= d.stopPrice) {
+            trackingPrice = d.stopPrice;
+            trackingTime = bTime;
+            trackingStatus = "CLOSED";
+            break;
+          }
+        }
+
+        trackingPrice = close;
+        trackingTime = bTime;
+      }
+
+      if (trackingPrice !== null && trackingTime !== null) {
+        const lastSeriesTime = ctx.data[ctx.data.length - 1]!.time as number;
+        if (lastSeriesTime > tEnd || trackingTime >= tEnd) {
+          trackingStatus = "CLOSED";
+        }
+
+        entry.currentPrice = trackingPrice;
+        entry.yCurrent = ctx.series.priceToCoordinate(trackingPrice);
+        entry.xCurrent = timeToX(ctx, trackingTime);
+        entry.trackingStatus = trackingStatus;
+      }
+    }
   }
   if (d.type === "channel") {
     entry.x3 = d.time3 != null ? timeToX(ctx, d.time3) : null;
