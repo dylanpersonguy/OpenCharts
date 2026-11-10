@@ -18,8 +18,15 @@ import type { useReplayChartData } from "../pages/trading/useReplayChartData.ts"
  * which is what React Fast Refresh needs to hot-reload it.
  */
 
-type ConfirmOrderState =
-  | (PlaceOrderInput & { _submit: () => Promise<unknown>; stopPrice?: number })
+export type ConfirmOrderState =
+  | (PlaceOrderInput & {
+      _submit: () => Promise<unknown>;
+      stopPrice?: number;
+      /** Adapter-supplied summary rows shown in the confirmation dialog. */
+      details?: ReadonlyArray<{ label: string; value: string; hint?: string; tone?: "warning" }>;
+      /** A short caution shown in the confirmation dialog. */
+      notice?: string;
+    })
   | null;
 
 export interface TerminalContextValue {

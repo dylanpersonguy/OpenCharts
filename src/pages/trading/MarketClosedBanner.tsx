@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Clock } from "lucide-react";
 import type { Symbol } from "../../services/schemas";
 import { useTradingStore } from "../../services/store.tsx";
+import { HlMarketNotice } from "../../hyperliquid/ui/HlMarketNotice.tsx";
+import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
 
 /**
  * How long after the last tick we consider the feed still live.
@@ -113,7 +115,17 @@ interface Props {
   symbolInfo: Symbol | undefined;
 }
 
+/**
+ * Hyperliquid markets trade around the clock, so the schedule-based "market
+ * closed" claim below would be wrong for them. In that mode show the
+ * informational oracle/liquidity notice instead (never a trading block).
+ */
 export function MarketClosedBanner({ symbolInfo }: Props) {
+  if (isHyperliquidMode()) return <HlMarketNotice category={symbolInfo?.category} />;
+  return <ScheduleMarketClosedBanner symbolInfo={symbolInfo} />;
+}
+
+function ScheduleMarketClosedBanner({ symbolInfo }: Props) {
   const [now, setNow] = useState(() => new Date());
   const [mountedAt] = useState(() => Date.now());
   const ticks = useTradingStore((s) => s.ticks);

@@ -1,7 +1,11 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useIsFeedConnected } from "../components/ConnectionIndicator.tsx";
-import { TerminalContext, type TerminalContextValue } from "./use-terminal.ts";
+import {
+  TerminalContext,
+  type ConfirmOrderState,
+  type TerminalContextValue,
+} from "./use-terminal.ts";
 import {
   OrderConfirmDialog,
   OrderModifyDialog,
@@ -56,10 +60,6 @@ import { getPipDigits } from "../pages/trading/utils.ts";
  * Layout belongs to whoever composes the panels, so no panel sizes, tab
  * selections or visibility flags are kept here.
  */
-
-type ConfirmOrderState =
-  | (PlaceOrderInput & { _submit: () => Promise<unknown>; stopPrice?: number })
-  | null;
 
 /** Stored timeframe for a symbol, or the 15m default. */
 function readStoredTimeframe(symbol: string): Timeframe {

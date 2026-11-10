@@ -1,19 +1,18 @@
-import { useState, useCallback, useMemo } from "react";
+import { lazy, Suspense, useState, useCallback, useMemo } from "react";
 import { Star } from "lucide-react";
 import { usePlaceOrder } from "../../services/queries.ts";
 import { formatNumber, cn } from "../../lib/utils.ts";
 import { toast } from "../../services/toast.ts";
 import { safeStorage } from "../../lib/safe-storage.ts";
+import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
 
-export function WatchlistPanel({
-  symbols,
-  ticks,
-  selectedSymbol,
-  onSelect,
-  oneClick,
-  accountId,
-  isFeedConnected = true,
-}: {
+// The Hyperliquid watchlist (categories, search, windowing, risk badges) is
+// loaded on demand so it never reaches the default demo bundle.
+const HlWatchlist = lazy(() =>
+  import("../../hyperliquid/ui/HlWatchlist.tsx").then((m) => ({ default: m.HlWatchlist })),
+);
+
+export interface WatchlistPanelProps {
   symbols: Array<{
     id?: string;
     name: string;
@@ -28,7 +27,29 @@ export function WatchlistPanel({
   oneClick?: boolean;
   accountId?: string | null;
   isFeedConnected?: boolean;
-}) {
+}
+
+/** The instrument list: the Hyperliquid variant when that adapter is installed, else the generic one. */
+export function WatchlistPanel(props: WatchlistPanelProps) {
+  if (isHyperliquidMode()) {
+    return (
+      <Suspense fallback={null}>
+        <HlWatchlist {...props} />
+      </Suspense>
+    );
+  }
+  return <GenericWatchlistPanel {...props} />;
+}
+
+function GenericWatchlistPanel({
+  symbols,
+  ticks,
+  selectedSymbol,
+  onSelect,
+  oneClick,
+  accountId,
+  isFeedConnected = true,
+}: WatchlistPanelProps) {
   const [filter, setFilter] = useState("");
   const placeOrder = usePlaceOrder();
 

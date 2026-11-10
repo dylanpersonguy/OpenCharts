@@ -30,6 +30,7 @@ Advanced charting · full drawing-tool suite · 8 indicators · session replay �
 - [Building on OpenCharts](#building-on-opencharts)
 - [Refreshing the bundled market data](#refreshing-the-bundled-market-data)
 - [Integrating OpenCharts](#integrating-opencharts)
+- [Hyperliquid broker](#hyperliquid-broker)
 - [Adding instruments](#adding-instruments)
 - [Configuration](#configuration)
 - [Scripts](#scripts)
@@ -674,6 +675,110 @@ VITE_ADAPTER=binance npm run dev
 It is the same terminal in the screenshot above, with nothing patched — only a
 different adapter installed.
 
+## Hyperliquid broker
+
+OpenCharts can run as a non-custodial front end for [Hyperliquid](https://hyperliquid.xyz) perpetuals,
+including HIP-3 markets (stocks, forex, commodities, indices). It is the same terminal and the same
+adapter contract: `createHyperliquidAdapter()` supplies market data, trading and account-scoped storage.
+
+> **Real money.** On mainnet this places real orders with real funds. Try it on testnet first and read
+> [docs/FEES.md](docs/FEES.md), [docs/SECURITY_MODEL.md](docs/SECURITY_MODEL.md) and
+> [docs/COMPLIANCE_CHECKLIST.md](docs/COMPLIANCE_CHECKLIST.md) before you launch it to anyone.
+
+### Architecture
+
+- **Market data** (`src/hyperliquid/marketData.ts`): REST for symbols and history, one WebSocket for
+  quotes and live candles. HIP-3 markets are discovered automatically.
+- **Trading** (`src/hyperliquid/trading.ts`): orders are signed in the browser by a limited *agent key* the
+  user approves once; it can trade but cannot withdraw. Every order carries the builder code, which is the
+  platform fee.
+- **Wallet and onboarding** (`wallet/`, `onboarding/`): connect, approve the agent key, approve the fee,
+  deposit and withdraw. Nothing opens until the user asks for it.
+- **UI** (`ui/`): the shell (top bar, dialogs), the order ticket, watchlist and depth panel that replace the
+  generic ones when this adapter is installed. They load lazily, so the demo bundle does not grow.
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the module map and data flow.
+
+### Environment variables
+
+Copy `.env.example` to `.env.local`. Everything starting with `VITE_` is public, so never put a secret in one.
+
+| Variable | Effect |
+| --- | --- |
+| `VITE_HL_BUILDER_ADDRESS` | Your builder (fee) address. **Setting it makes Hyperliquid the default adapter.** |
+| `VITE_HL_BUILDER_FEE` | Platform fee in tenths of a basis point, 0 to 100 (default 100 = 0.10% per side, Hyperliquid's perps maximum) |
+| `VITE_HL_NETWORK` | `mainnet` (default) or `testnet` |
+| `VITE_ADAPTER` | Force a backend: `hyperliquid`, `binance` or `demo`. Overrides the default above. |
+| `VITE_FEE_CONFIG_URL` | Optional JSON for a remote fee kill switch and banner message |
+| `VITE_GEO_CHECK_URL` | Optional geo-check endpoint used by the compliance gate |
+
+With neither `VITE_ADAPTER` nor `VITE_HL_BUILDER_ADDRESS` set, the app runs the bundled demo exactly as before.
+
+### Run it on testnet
+
+```bash
+cp .env.example .env.local
+# in .env.local:
+#   VITE_ADAPTER=hyperliquid
+#   VITE_HL_NETWORK=testnet
+#   VITE_HL_BUILDER_ADDRESS=0xYourBuilderAddress   # optional on testnet
+npm run dev
+```
+
+Connect a wallet, click **Enable trading** (two signatures: the trading key, then the fee), fund the account
+from the Hyperliquid testnet faucet and place a small order. The builder wallet needs at least 100 USDC of
+perps account value to receive fees; see [docs/OPERATIONS.md](docs/OPERATIONS.md).
+
+### Run it on mainnet
+
+```bash
+# .env.production (or your host's build environment)
+VITE_HL_NETWORK=mainnet
+VITE_HL_BUILDER_ADDRESS=0xYourBuilderAddress
+VITE_HL_BUILDER_FEE=100
+npm run build && npm run check:size
+```
+
+Before going live: work through [docs/COMPLIANCE_CHECKLIST.md](docs/COMPLIANCE_CHECKLIST.md), set up the
+builder wallet and monitoring from [docs/OPERATIONS.md](docs/OPERATIONS.md), and test the whole flow on testnet.
+Raising the fee later forces every user to approve again; the terminal explains this and walks them through it.
+
+### Use the adapter in your own app
+
+```tsx
+import { OpenChartsProvider, Terminal } from "@dylanpersonguy/opencharts";
+import { createHyperliquidAdapter } from "./hyperliquid/adapter";
+import { ComplianceGate } from "./hyperliquid/compliance";
+import { HyperliquidShell } from "./hyperliquid/ui/HyperliquidShell";
+
+const adapter = createHyperliquidAdapter(); // create once, outside render
+
+<ComplianceGate>
+  <OpenChartsProvider adapter={adapter}>
+    <HyperliquidShell>
+      <Terminal />
+    </HyperliquidShell>
+  </OpenChartsProvider>
+</ComplianceGate>;
+```
+
+`HyperliquidShell` adds the connect and deposit controls, the fee banner and the setup dialogs. Without it the
+panels still work, but nothing hosts the setup dialog, so the order ticket's **Enable trading** button does
+nothing. The Hyperliquid adapter is not part of the npm package's core entry; only its types are exported.
+
+### What the Hyperliquid terminal does differently
+
+- The order ticket shows size in base units with the USD notional, enforces each market's size precision and
+  the $10 minimum order, and shows the platform fee on both opening and closing, with a round-trip estimate.
+- Leverage and cross/isolated margin are set per market. Isolated-only markets lock the toggle.
+- Order confirmation lists notional, margin, fees and, for isolated margin, an estimated liquidation price.
+  Cross-margin liquidation depends on your whole account, so none is shown.
+- Positions show the exchange's liquidation price, funding and margin mode. Trade history shows fees including
+  the platform fee.
+- Third-party (HIP-3) markets carry a risk badge. Stocks, forex and commodities show an informational note
+  outside their usual hours: trading stays available, but the price follows an oracle that can be stale.
+- Sample-data panels (news, calendar) and the simulated depth ladder are not shown.
+
 ## Adding instruments
 
 Demo instruments are defined in `src/services/demo/instruments.ts` (currently
@@ -689,7 +794,7 @@ Everything works with no configuration. Optional environment variables:
 
 | Variable | Effect |
 | --- | --- |
-| `VITE_ADAPTER` | Set to `binance` to run the demo against live Binance prices |
+| `VITE_ADAPTER` | `binance` runs against live Binance prices, `hyperliquid` runs the [Hyperliquid broker](#hyperliquid-broker), `demo` forces the bundled demo |
 | `VITE_API_URL` | Base URL used by the legacy HTTP client in `src/services/api/` |
 
 **OpenCharts ships no analytics or telemetry.** Nothing leaves the browser

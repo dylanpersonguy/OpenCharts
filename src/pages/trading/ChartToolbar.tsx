@@ -48,6 +48,7 @@ import {
   type Timeframe,
 } from "./constants.ts";
 import { ChartTemplatesMenu } from "./ChartTemplatesMenu.tsx";
+import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
 import { ReplayHUD } from "./ReplayHUD.tsx";
 import { getPipDigits } from "./utils.ts";
 
@@ -253,6 +254,9 @@ export function ChartToolbar({
                     )}
                   >
                     <span className="font-medium">{s.name}</span>
+                    {s.displayName && s.displayName !== s.name && (
+                      <span className="text-xs text-muted-foreground ml-2 mr-auto">{s.displayName}</span>
+                    )}
                     <span className="text-muted-foreground text-xs">{s.category}</span>
                   </button>
                 ))}
@@ -406,12 +410,15 @@ export function ChartToolbar({
           active={showRightPanel && rightPanel === "watchlist"}
           onClick={() => onRightPanel("watchlist")}
         />
-        <ToolButton
-          icon={Newspaper}
-          tooltip="News"
-          active={showRightPanel && rightPanel === "news"}
-          onClick={() => onRightPanel("news")}
-        />
+        {/* The news panel is sample data; a live broker must not show it. */}
+        {!isHyperliquidMode() && (
+          <ToolButton
+            icon={Newspaper}
+            tooltip="News"
+            active={showRightPanel && rightPanel === "news"}
+            onClick={() => onRightPanel("news")}
+          />
+        )}
         <ToolButton
           icon={Star}
           tooltip="TradingView Analysis"

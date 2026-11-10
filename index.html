@@ -2,6 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Content-Security-Policy: a strict <meta> policy is injected here by the
+      "openbroker-security-headers" plugin in vite.config.ts for PRODUCTION
+      builds only (dev needs inline scripts + HMR websocket). Source of truth:
+      src/hyperliquid/compliance/csp.ts. frame-ancestors can only be sent as an
+      HTTP header: see public/_headers and docs/deploy/.
+    -->
     <link rel="icon" type="image/png" href="/icons/icon-192x192.png" />
     <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
     <link rel="manifest" href="/manifest.json" />
@@ -24,6 +31,7 @@
     <title>OpenCharts — Open-Source Trading Terminal</title>
   </head>
   <body>
+    <noscript>OpenBroker needs JavaScript to run. It is a non-custodial trading interface and cannot work without it.</noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

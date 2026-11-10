@@ -8,6 +8,18 @@
  * contextual reference — they are NOT the main chart.
  */
 import { useEffect, useRef, memo } from "react";
+import { isHyperliquidMode } from "../hyperliquid/ui/mode.ts";
+
+/**
+ * SECURITY: these widgets inject a third-party <script> (s3.tradingview.com)
+ * into the same origin that holds the Hyperliquid agent key, which is
+ * equivalent to granting that host XSS. They never load in Hyperliquid mode;
+ * the effects below return before touching the DOM, so no remote script is
+ * ever created.
+ */
+export function isTradingViewAllowed(): boolean {
+  return !isHyperliquidMode();
+}
 
 // TradingView's async embed scripts restructure the DOM (e.g. create iframes,
 // move nodes) after we append them.  When deps change or the component unmounts
@@ -137,7 +149,7 @@ export const TradingViewTickerTape = memo(function TradingViewTickerTape({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!isTradingViewAllowed() || !containerRef.current) return;
     const container = containerRef.current;
     safeClear(container);
 
@@ -190,7 +202,7 @@ export const TradingViewTechnicalAnalysis = memo(function TradingViewTechnicalAn
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!isTradingViewAllowed() || !containerRef.current) return;
     const container = containerRef.current;
     safeClear(container);
 
@@ -253,7 +265,7 @@ export const TradingViewEconomicCalendar = memo(function TradingViewEconomicCale
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!isTradingViewAllowed() || !containerRef.current) return;
     const container = containerRef.current;
     safeClear(container);
 
@@ -316,7 +328,7 @@ export const TradingViewMiniChart = memo(function TradingViewMiniChart({
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!isTradingViewAllowed() || !containerRef.current) return;
     const container = containerRef.current;
     safeClear(container);
 

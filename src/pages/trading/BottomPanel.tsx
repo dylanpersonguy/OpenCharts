@@ -16,7 +16,10 @@ import type {
 import type { Account, ClosedPosition, Order, Position } from "../../services/schemas.ts";
 import { Button } from "../../components/ui/button.tsx";
 import { TradeJournalPanel } from "../../components/TradingDialogs.tsx";
-import { TradingViewEconomicCalendar } from "../../components/TradingViewWidgets.tsx";
+import {
+  TradingViewEconomicCalendar,
+  isTradingViewAllowed,
+} from "../../components/TradingViewWidgets.tsx";
 import { toast } from "../../services/toast.ts";
 import { formatCurrency, formatNumber, formatDate, cn, pnlClass } from "../../lib/utils.ts";
 import { MOCK_EVENTS, MOCK_NEWS } from "./constants.ts";
@@ -24,11 +27,15 @@ import { PositionsTable } from "./PositionsTable.tsx";
 import { OrdersTable } from "./OrdersTable.tsx";
 import { computeLivePnl, computeLivePrice } from "../../lib/livePnl.ts";
 import { safeStorage } from "../../lib/safe-storage.ts";
+import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
 
 type TradingActionError = {
   error?: { message?: string };
   message?: string;
 };
+
+/** Closed positions from adapters that report the platform fee separately (Hyperliquid). */
+type ClosedWithPlatformFee = ClosedPosition & { platformFee?: number };
 
 type AccountOption = Pick<Account, "id"> & { label?: string | null };
 
@@ -39,9 +46,7 @@ function getErrorMessage(error: unknown): string {
 
 export interface BottomPanelProps {
   tab: "positions" | "orders" | "history" | "journal" | "calendar" | "news";
-  onTabChange: (
-    t: "positions" | "orders" | "history" | "journal" | "calendar" | "news",
-  ) => void;
+  onTabChange: (t: "positions" | "orders" | "history" | "journal" | "calendar" | "news") => void;
   positions: Position[];
   orders: Order[];
   accountId: string | null;
@@ -134,8 +139,7 @@ export function BottomPanel({
     closePosition.mutate(
       { positionId, accountId, quantity },
       {
-        onSuccess: () =>
-          toast.success("Partial Close", `Closed ${quantity} lot(s) of the position`),
+        onSuccess: () => toast.success("Partial Close", `Closed ${quantity} of the position`),
         onError: (err: unknown) => toast.error("Partial Close Failed", getErrorMessage(err)),
       },
     );
@@ -179,13 +183,32 @@ export function BottomPanel({
     icon: typeof Clock;
     count?: number;
   }[] = [
-    { key: "positions", label: "Positions", icon: TrendingUp, count: openPositions.length },
-    { key: "orders", label: "Orders", icon: Clock, count: pendingOrders.length },
+    {
+      key: "positions",
+      label: "Positions",
+      icon: TrendingUp,
+      count: openPositions.length,
+    },
+    {
+      key: "orders",
+      label: "Orders",
+      icon: Clock,
+      count: pendingOrders.length,
+    },
     { key: "history", label: "Trade History", icon: History },
-    { key: "journal", label: "Journal", icon: BookOpen, count: journalEntries.length },
+    {
+      key: "journal",
+      label: "Journal",
+      icon: BookOpen,
+      count: journalEntries.length,
+    },
     { key: "calendar", label: "Calendar", icon: Globe },
     { key: "news", label: "News", icon: Newspaper },
   ];
+  // The calendar and news tabs are sample data; a live broker must not show it.
+  const visibleTabs = isHyperliquidMode()
+    ? tabs.filter((t) => t.key !== "calendar" && t.key !== "news")
+    : tabs;
 
   return (
     <div
@@ -194,7 +217,7 @@ export function BottomPanel({
     >
       {/* Tab bar */}
       <div className="flex items-center gap-0.5 px-2 py-1 border-b border-border bg-secondary text-xs overflow-x-auto no-scrollbar">
-        {tabs.map((t) => (
+        {visibleTabs.map((t) => (
           <button
             key={t.key}
             onClick={() => onTabChange(t.key)}
@@ -298,7 +321,8 @@ export function BottomPanel({
 function TradeHistoryTable({ accountId }: { accountId: string | null }) {
   const [page, setPage] = useState(1);
   const { data: closedData, isLoading } = useClosedPositions(accountId, page);
-  const trades: ClosedPosition[] = closedData?.data || [];
+  const trades: ClosedWithPlatformFee[] = closedData?.data || [];
+  const showPlatformFee = trades.some((t) => t.platformFee !== undefined);
   const totalPages = closedData?.totalPages || 1;
   const accounts = useTradingStore((s) => s.accounts as AccountOption[]);
   const activeAccount = accounts.find((account) => account.id === accountId);
@@ -342,14 +366,15 @@ function TradeHistoryTable({ accountId }: { accountId: string | null }) {
             <th>Volume</th>
             <th>Entry</th>
             <th>Exit</th>
-            <th>Commission</th>
+            <th>{showPlatformFee ? "Fees" : "Commission"}</th>
             <th>Gross P&L</th>
             <th>Net P&L</th>
           </tr>
         </thead>
         <tbody>
           {trades.map((t) => {
-            const comm = t.commission ?? 0;
+            const platform = t.platformFee ?? 0;
+            const comm = (t.commission ?? 0) + platform;
             const gross = t.realizedPnl ?? 0;
             const net = gross - comm;
             return (
@@ -362,7 +387,14 @@ function TradeHistoryTable({ accountId }: { accountId: string | null }) {
                 <td className="font-mono">{t.quantity}</td>
                 <td className="font-mono">{t.entryPrice ? formatNumber(t.entryPrice, 5) : "--"}</td>
                 <td className="font-mono">{t.exitPrice ? formatNumber(t.exitPrice, 5) : "--"}</td>
-                <td className="font-mono text-muted-foreground">
+                <td
+                  className="font-mono text-muted-foreground"
+                  title={
+                    showPlatformFee
+                      ? `Exchange fee ${(t.commission ?? 0).toFixed(4)} + platform fee ${platform.toFixed(4)} (closing fills only)`
+                      : undefined
+                  }
+                >
                   {comm > 0 ? `-${comm.toFixed(2)}` : "0.00"}
                 </td>
                 <td
@@ -408,9 +440,12 @@ function TradeHistoryTable({ accountId }: { accountId: string | null }) {
 
 // ── Economic Calendar ────────────────────────────────────────
 function EconomicCalendar() {
-  const [useTvCalendar, setUseTvCalendar] = useState(
+  // Hyperliquid mode never loads third-party TradingView scripts (see TradingViewWidgets.tsx).
+  const tvAllowed = isTradingViewAllowed();
+  const [tvPref, setUseTvCalendar] = useState(
     () => safeStorage.getItem("tvEconCalendar") !== "false",
   );
+  const useTvCalendar = tvAllowed && tvPref;
   const isDark = !document.documentElement.classList.contains("light");
 
   const impactColor = {
@@ -436,18 +471,22 @@ function EconomicCalendar() {
         >
           Sim Data
         </button>
-        <button
-          onClick={() => {
-            setUseTvCalendar(true);
-            safeStorage.setItem("tvEconCalendar", "true");
-          }}
-          className={cn(
-            "px-2 py-0.5 rounded text-[10px] font-medium",
-            useTvCalendar ? "bg-[#2962ff] text-white" : "text-muted-foreground hover:bg-secondary",
-          )}
-        >
-          TradingView Live
-        </button>
+        {tvAllowed && (
+          <button
+            onClick={() => {
+              setUseTvCalendar(true);
+              safeStorage.setItem("tvEconCalendar", "true");
+            }}
+            className={cn(
+              "px-2 py-0.5 rounded text-[10px] font-medium",
+              useTvCalendar
+                ? "bg-[#2962ff] text-white"
+                : "text-muted-foreground hover:bg-secondary",
+            )}
+          >
+            TradingView Live
+          </button>
+        )}
       </div>
       {useTvCalendar ? (
         <div className="flex-1 min-h-0">
@@ -472,9 +511,12 @@ function EconomicCalendar() {
           </thead>
           <tbody>
             <tr>
-              <td colSpan={7} className="px-3 py-1.5 bg-secondary/40 text-[10px] text-muted-foreground">
-                <span className="font-medium uppercase tracking-wide">Sample data</span> — switch
-                the TradingView calendar back on for live events.
+              <td
+                colSpan={7}
+                className="px-3 py-1.5 bg-secondary/40 text-[10px] text-muted-foreground"
+              >
+                <span className="font-medium uppercase tracking-wide">Sample data</span>
+                {tvAllowed ? " — switch the TradingView calendar back on for live events." : null}
               </td>
             </tr>
             {MOCK_EVENTS.map((ev, i) => (
