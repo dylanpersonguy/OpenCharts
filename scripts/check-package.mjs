@@ -23,7 +23,26 @@ for (const [subpath, target] of Object.entries(pkg.exports)) {
   }
 }
 
-const core = readFileSync(join(ROOT, "dist-lib/index.js"), "utf8");
+// The core entry may delegate to shared chunks (lazy panels make the bundler split
+// the shared code out of index.js). Check index.js plus every chunk it imports
+// STATICALLY; dynamically imported chunks (candle data, lazy panels) are excluded.
+function readStaticGraph(entry) {
+  const seen = new Set();
+  const queue = [entry];
+  let text = "";
+  while (queue.length) {
+    const file = queue.pop();
+    if (seen.has(file)) continue;
+    seen.add(file);
+    const src = readFileSync(join(ROOT, "dist-lib", file), "utf8");
+    text += src + "\n";
+    for (const m of src.matchAll(/^(?:import|export)[^;]*?from\s*["'](\.\/[^"']+\.js)["']/gm)) {
+      queue.push(join(dirname(file), m[1]).replaceAll("\\", "/"));
+    }
+  }
+  return text;
+}
+const core = readStaticGraph("index.js");
 if (/USD_(1m|5m|15m|30m|1h|4h|1d|1w)/.test(core)) {
   failures.push("dist-lib/index.js references bundled candle data; it belongs in the demo entry");
 }

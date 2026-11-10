@@ -45,6 +45,17 @@ jobs:
       - name: Build
         run: npm run build
 
+      # The production CSP is `script-src 'self'`; an inline <script> in the
+      # built HTML would be blocked (and is exactly what the policy forbids).
+      - name: Check CSP and security headers
+        run: |
+          grep -q 'http-equiv="Content-Security-Policy"' dist/index.html
+          grep -q 'Content-Security-Policy:' dist/_headers
+          if grep -P '<script(?![^>]*\bsrc=)' dist/index.html; then
+            echo "inline <script> found in dist/index.html" >&2
+            exit 1
+          fi
+
       - name: Check first-load payload
         run: npm run check:size
 

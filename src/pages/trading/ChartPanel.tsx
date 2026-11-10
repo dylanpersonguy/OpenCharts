@@ -1,4 +1,5 @@
 import { useQueryClient } from "@tanstack/react-query";
+import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
 import {
   type CandlestickData,
   ColorType,
@@ -1344,7 +1345,7 @@ export function ChartPanel({
   // ── Challenge-aware rule levels (daily loss / max DD / profit target) ──
   const challengeFlags = useMemo(
     () => ({
-      enabled: chartPrefs.challengeOverlay && !!accountId,
+      enabled: chartPrefs.challengeOverlay && !!accountId && !isHyperliquidMode(),
       dailyLoss: chartPrefs.challengeDailyLossLine,
       maxDrawdown: chartPrefs.challengeMaxDrawdownLine,
       profitTarget: chartPrefs.challengeProfitTargetLine,
@@ -2062,17 +2063,20 @@ export function ChartPanel({
       />
 
       {/* News overlay (popup, config dialog, button) */}
-      <NewsOverlay
-        newsConfig={newsConfig}
-        setNewsConfig={setNewsConfig}
-        showNewsConfigDialog={showNewsConfigDialog}
-        setShowNewsConfigDialog={setShowNewsConfigDialog}
-        newsPopup={newsPopup}
-        setNewsPopup={setNewsPopup}
-        isDark={isDark}
-        pipDigits={pipDigits}
-        containerRef={containerRef}
-      />
+      {/* No economic-calendar data source exists for Hyperliquid markets. */}
+      {!isHyperliquidMode() && (
+        <NewsOverlay
+          newsConfig={newsConfig}
+          setNewsConfig={setNewsConfig}
+          showNewsConfigDialog={showNewsConfigDialog}
+          setShowNewsConfigDialog={setShowNewsConfigDialog}
+          newsPopup={newsPopup}
+          setNewsPopup={setNewsPopup}
+          isDark={isDark}
+          pipDigits={pipDigits}
+          containerRef={containerRef}
+        />
+      )}
 
       {/* Chart-wide right-click menu (TradingView-style) */}
       {chartMenu && (

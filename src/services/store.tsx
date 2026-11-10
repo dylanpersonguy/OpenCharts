@@ -3,6 +3,7 @@ import { api } from "./api.ts";
 import { wsClient } from "./ws.ts";
 import type { Account, Order, Position, Symbol, User } from "./schemas.ts";
 import { safeStorage } from "../lib/safe-storage.ts";
+import { isHyperliquidMode } from "../hyperliquid/ui/mode.ts";
 
 type LoginMfaResponse = {
   mfaRequired: true;
@@ -388,6 +389,14 @@ export const useTradingStore = create<TradingState>((set, get) => ({
   loadSymbols: async () => {
     const symbols = await api.getSymbols();
     set({ symbols });
+    // Hyperliquid has no demo "BTCUSD": land on a real market (prefer BTC) once symbols load.
+    if (isHyperliquidMode() && symbols.length > 0) {
+      const cur = get().selectedSymbol;
+      if (!symbols.some((x) => x.name === cur)) {
+        const pick = symbols.find((x) => x.name === "BTC") ?? symbols[0];
+        if (pick) get().setSelectedSymbol(pick.name);
+      }
+    }
   },
 
   updateTick: (symbolName, bid, ask, timestamp) => {

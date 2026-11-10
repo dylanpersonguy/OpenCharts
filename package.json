@@ -61,11 +61,16 @@
     "check:size": "node scripts/check-bundle-size.mjs",
     "build:lib": "vite build --config vite.lib.config.ts && node scripts/build-lib-css.mjs",
     "check:package": "node scripts/check-package.mjs",
+    "builder:revenue": "tsx scripts/builder/revenue.ts",
+    "builder:reconcile": "tsx scripts/builder/reconcile.ts",
+    "builder:claim": "tsx scripts/builder/claim.ts",
+    "builder:health": "tsx scripts/builder/health.ts",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/",
     "test": "vitest run",
     "test:watch": "vitest",
+    "e2e:hl": "playwright test",
     "prepublishOnly": "npm run typecheck && npm run lint -- --max-warnings=0 && npm run test && npm run build:lib && npm run check:package"
   },
   "peerDependencies": {
@@ -79,6 +84,7 @@
     }
   },
   "dependencies": {
+    "@nktkas/hyperliquid": "^0.33.3",
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-query": "^5.90.21",
@@ -88,7 +94,8 @@
     "lightweight-charts": "^4.2.0",
     "lucide-react": "^0.575.0",
     "tailwind-merge": "^3.5.0",
-    "zod": "^3.25.76",
+    "viem": "^2.57.17",
+    "zod": "^4.6.7",
     "zustand": "^5.0.0"
   },
   "devDependencies": {
@@ -97,6 +104,7 @@
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
+    "@types/lz4js": "^0.2.2",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
@@ -106,11 +114,13 @@
     "eslint-plugin-react-refresh": "^0.5.7",
     "globals": "^17.12.0",
     "jsdom": "^25.0.1",
+    "lz4js": "^0.2.0",
     "postcss": "^8.5.6",
     "postcss-prefix-selector": "^2.2.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwindcss": "^3.4.19",
+    "tsx": "^4.23.15",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.70.0",
     "vite": "^6.0.0",

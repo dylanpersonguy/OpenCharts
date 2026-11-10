@@ -16,6 +16,14 @@ interface OrderConfirmDialogProps {
     stopPrice?: number;
     takeProfit?: number;
     stopLoss?: number;
+    /**
+     * Adapter-supplied summary rows (notional, fees, margin mode, liquidation
+     * estimate...). When present they replace the generic margin/commission
+     * rows, which assume FX-style contract sizes.
+     */
+    details?: ReadonlyArray<{ label: string; value: string; hint?: string; tone?: "warning" }>;
+    /** A short caution shown above the buttons (e.g. a third-party market warning). */
+    notice?: string;
   } | null;
   tick?: { bid: number; ask: number };
   symbolInfo?: {
@@ -125,10 +133,31 @@ export function OrderConfirmDialog({
                 valueClass="text-sell"
               />
             )}
-            {marginRequired !== null && (
-              <Row label="Margin Required" value={formatCurrency(marginRequired)} />
+            {order.details ? (
+              order.details.map((d) => (
+                <Row
+                  key={d.label}
+                  label={d.label}
+                  value={d.value}
+                  extra={d.hint}
+                  valueClass={d.tone === "warning" ? "text-warning" : undefined}
+                />
+              ))
+            ) : (
+              <>
+                {marginRequired !== null && (
+                  <Row label="Margin Required" value={formatCurrency(marginRequired)} />
+                )}
+                {commission !== null && (
+                  <Row label="Commission" value={formatCurrency(commission)} />
+                )}
+              </>
             )}
-            {commission !== null && <Row label="Commission" value={formatCurrency(commission)} />}
+            {order.notice && (
+              <p role="note" className="pt-1 text-[11px] leading-snug text-muted-foreground">
+                {order.notice}
+              </p>
+            )}
           </div>
 
           <div className="px-5 py-3 border-t border-border/40 flex gap-2">

@@ -7,6 +7,32 @@ major version is `0`, minor releases may contain breaking changes.
 
 ## [Unreleased]
 
+### Added
+
+- **Hyperliquid broker.** `createHyperliquidAdapter()` composes live market data (including HIP-3 markets),
+  non-custodial trading with a browser-held agent key, and account-scoped storage. It passes the adapter
+  conformance suite for market data. Setting `VITE_HL_BUILDER_ADDRESS` makes it the default backend of the
+  hosted app (`VITE_ADAPTER=hyperliquid|binance|demo` overrides); without it nothing changes. It loads lazily,
+  so the demo bundle is unaffected.
+- **Hyperliquid terminal UI**: connect, deposit and setup from a top bar, a remote fee banner, a watchlist with
+  category tabs, search, favourites and windowed rendering, an order ticket with live fee disclosure (open and
+  close), leverage and margin mode, size validation, post-only and reduce-only, a richer order confirmation, and
+  real order-book depth.
+- Positions show liquidation price, funding and margin mode; trade history shows fees including the platform fee.
+- An informational market-hours note for HIP-3 stocks, forex and commodities (`marketHoursNotice`).
+- When Hyperliquid rejects an order because the builder fee changed, the terminal explains it and leads the user
+  through approving again.
+- `docs/ARCHITECTURE.md`, and a Hyperliquid section in the README.
+
+### Changed
+
+- `OrderPanel`, `WatchlistPanel`, `DOMPanel` and `MarketClosedBanner` pick the Hyperliquid variant when that
+  adapter is installed. Behaviour with other adapters is unchanged.
+- Partial close is offered for any position size (it was hidden at 1 unit or less, which excluded most crypto sizes).
+- `scripts/check-package.mjs` follows the core entry's static chunks, since lazy panels move shared code out of
+  `index.js`.
+- Order confirmation accepts optional adapter-supplied detail rows.
+
 ## [0.3.0] — 2026-09-21
 
 OpenCharts is now installable: `npm install @dylanpersonguy/opencharts`. This

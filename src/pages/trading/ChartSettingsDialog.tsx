@@ -8,6 +8,7 @@ import {
   Target,
   X,
 } from "lucide-react";
+import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
 import { useState, type ReactNode } from "react";
 import { type ChartPreferences, updateChartPreferences } from "../../hooks/useChartPreferences.ts";
 import { useDragOffset } from "../../hooks/useDragOffset.ts";
@@ -505,6 +506,8 @@ export function ChartSettingsDialog(props: ChartSettingsDialogProps) {
     onClose();
   };
   const resetPayload = RESET_BY_TAB[tab];
+  // Challenge-rule levels belong to prop-firm accounts; a brokerage account has none.
+  const tabs = isHyperliquidMode() ? TABS.filter((t) => t.id !== "challenge") : TABS;
 
   return (
     <div
@@ -531,7 +534,7 @@ export function ChartSettingsDialog(props: ChartSettingsDialogProps) {
         </div>
         <div className="flex min-h-0 flex-1">
           <div className="w-36 shrink-0 border-r border-border p-2">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}

@@ -1,5 +1,11 @@
-import { useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 import { formatNumber, cn } from "../../lib/utils.ts";
+import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
+
+// Live brokers show the real book; loaded on demand so the demo bundle is unchanged.
+const HlDepthPanel = lazy(() =>
+  import("../../hyperliquid/ui/HlDepthPanel.tsx").then((m) => ({ default: m.HlDepthPanel })),
+);
 
 /**
  * Deterministic pseudo-random depth for a price level.
@@ -20,7 +26,18 @@ function depthAt(symbol: string, price: number, spread: number, base: number, ra
   return Math.floor(unit * range + base);
 }
 
-export function DOMPanel({
+export function DOMPanel(props: { symbol: string; tick?: { bid: number; ask: number } }) {
+  if (isHyperliquidMode()) {
+    return (
+      <Suspense fallback={null}>
+        <HlDepthPanel symbol={props.symbol} />
+      </Suspense>
+    );
+  }
+  return <SimulatedDOMPanel {...props} />;
+}
+
+function SimulatedDOMPanel({
   symbol,
   tick,
 }: {
