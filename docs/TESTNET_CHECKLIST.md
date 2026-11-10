@@ -234,3 +234,13 @@ Fill in one row per item. "Result" is PASS, FAIL (with a link to the fix) or N/A
 | X6 | non-crypto HIP-3 on testnet | | | | |
 
 Final sign-off: ______________________  Date: ____________  Report files attached: ______________________
+
+## Additional items from the wallet and market-data reviews
+
+| ID | Item | How to test | If it fails |
+|---|---|---|---|
+| R1 | Agent renewal replaces the old agent. The approval name embeds `valid_until <ms>` and differs on every approval, and Hyperliquid allows 3 named agents per account. | Approve, disconnect and reconnect 4 times on testnet and read `extraAgents` after each. | If the 4th approval fails or agents pile up, use a stable base name in `agentKey.buildAgentName` and add a "too many agents" message in `wallet/errors.ts`. |
+| R2 | Withdraw fee: does the 1 USDC come out of the amount or on top? | Withdraw 6 USDC on testnet and compare balances. | Adjust `validateWithdraw` and the confirm copy in `wallet/funds.ts` and `DepositPanel.tsx`. |
+| R3 | `withdrawable` on unified or portfolio-margin accounts may be 0 while USDC sits in spot. | Check a unified testnet account. | Use the unified-collateral path from `accountState.ts` in the withdraw check. |
+| R4 | `modify` carries no builder field, so modified orders may earn no fee. | Covered by `hl-testnet-verify.mts` step 6. | Switch `modifyOrder` in `trading.ts` to cancel-and-replace. |
+| R5 | The "$10 minimum" is an assumption: the docs only name a `minTradeNtlRejected` error. | Step 8 of `hl-testnet-verify.mts`. | Update `MIN_ORDER_USD` in `ui/orderMath.ts` and `orders.ts`. |

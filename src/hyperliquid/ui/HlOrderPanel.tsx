@@ -549,7 +549,7 @@ export function HlOrderPanel({
               </span>
             ) : (
               <span className="text-muted-foreground">
-                {market ? `Up to ${market.szDecimals} decimals. Minimum order $${MIN_ORDER_USD}.` : "Loading market…"}
+                {market ? `${market.szDecimals === 0 ? "Whole units only" : `Up to ${market.szDecimals} decimal${market.szDecimals === 1 ? "" : "s"}`}. Minimum order $${MIN_ORDER_USD}.` : "Loading market…"}
               </span>
             )}
           </p>

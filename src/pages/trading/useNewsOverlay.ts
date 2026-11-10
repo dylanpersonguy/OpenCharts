@@ -12,6 +12,7 @@ import { useEconomicCalendar, type EconomicCalendarEvent } from "../../services/
 import { type NewsOverlayConfig } from "./constants.ts";
 import { extractCurrencies } from "./utils.ts";
 import { safeStorage } from "../../lib/safe-storage.ts";
+import { isHyperliquidMode } from "../../hyperliquid/ui/mode.ts";
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -76,7 +77,7 @@ export function useNewsOverlay(
   }, []);
 
   // Extract currency pair from symbol
-  const symbolCurrencies = useMemo(() => extractCurrencies(selectedSymbol), [selectedSymbol]);
+  const symbolCurrencies = useMemo(() => isHyperliquidMode() ? [] : extractCurrencies(selectedSymbol), [selectedSymbol]);
   const { data: rawCalendarData } = useEconomicCalendar(symbolCurrencies);
 
   // Filter events based on config

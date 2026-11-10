@@ -2063,17 +2063,20 @@ export function ChartPanel({
       />
 
       {/* News overlay (popup, config dialog, button) */}
-      <NewsOverlay
-        newsConfig={newsConfig}
-        setNewsConfig={setNewsConfig}
-        showNewsConfigDialog={showNewsConfigDialog}
-        setShowNewsConfigDialog={setShowNewsConfigDialog}
-        newsPopup={newsPopup}
-        setNewsPopup={setNewsPopup}
-        isDark={isDark}
-        pipDigits={pipDigits}
-        containerRef={containerRef}
-      />
+      {/* No economic-calendar data source exists for Hyperliquid markets. */}
+      {!isHyperliquidMode() && (
+        <NewsOverlay
+          newsConfig={newsConfig}
+          setNewsConfig={setNewsConfig}
+          showNewsConfigDialog={showNewsConfigDialog}
+          setShowNewsConfigDialog={setShowNewsConfigDialog}
+          newsPopup={newsPopup}
+          setNewsPopup={setNewsPopup}
+          isDark={isDark}
+          pipDigits={pipDigits}
+          containerRef={containerRef}
+        />
+      )}
 
       {/* Chart-wide right-click menu (TradingView-style) */}
       {chartMenu && (
