@@ -541,7 +541,7 @@ function renderRectangle(scope: BitmapCoordinatesRenderingScope, e: ResolvedEntr
   applyDash(scope, dashFor(e.d.lineStyle));
   ctx.strokeRect(Math.min(a.x, b.x), Math.min(a.y, b.y), Math.abs(b.x - a.x), Math.abs(b.y - a.y));
   ctx.restore();
-  if (showHandles(e)) drawRectHandles(scope, a, b, e.d.color);
+  if (showHandles(e)) drawRectHandles(scope, a, b, e.d.color, true);
 }
 
 function drawRectHandles(
@@ -549,11 +549,20 @@ function drawRectHandles(
   a: BPt,
   b: BPt,
   color: string,
+  edgeMidpoints = false,
 ): void {
   drawHandle(scope, a, color);
   drawHandle(scope, b, color);
   drawHandle(scope, { x: a.x, y: b.y }, color);
   drawHandle(scope, { x: b.x, y: a.y }, color);
+  if (!edgeMidpoints) return;
+  // TradingView-style side handles: each one resizes a single edge.
+  const midX = (a.x + b.x) / 2;
+  const midY = (a.y + b.y) / 2;
+  drawHandle(scope, { x: midX, y: a.y }, color);
+  drawHandle(scope, { x: midX, y: b.y }, color);
+  drawHandle(scope, { x: a.x, y: midY }, color);
+  drawHandle(scope, { x: b.x, y: midY }, color);
 }
 
 function renderFibonacci(scope: BitmapCoordinatesRenderingScope, e: ResolvedEntry): void {

@@ -1,5 +1,5 @@
 import { dist, distToSegment, type Pt, pointInBox } from "./geometry";
-import type { Hit, PriceKey, ResolvedEntry, TimeKey } from "./types";
+import type { Hit, HitCursor, PriceKey, ResolvedEntry, TimeKey } from "./types";
 
 const HANDLE_TOLERANCE = 8;
 const LINE_TOLERANCE = 6;
@@ -96,8 +96,13 @@ function hitText(e: ResolvedEntry, p: Pt, tol: Tol): Hit | null {
     : null;
 }
 
-function pointHit(e: ResolvedEntry, timeKey: TimeKey | null, priceKey: PriceKey | null): Hit {
-  return { id: e.d.id, region: { kind: "point", timeKey, priceKey } };
+function pointHit(
+  e: ResolvedEntry,
+  timeKey: TimeKey | null,
+  priceKey: PriceKey | null,
+  cursor?: HitCursor,
+): Hit {
+  return { id: e.d.id, region: { kind: "point", timeKey, priceKey, ...(cursor ? { cursor } : {}) } };
 }
 
 // Position handles: entry / target / stop sit at the box mid-x; the right edge
@@ -162,22 +167,72 @@ function hitRectangle(e: ResolvedEntry, p: Pt, tol: Tol): Hit | null {
   if (e.x1 === null || e.y1 === null || e.x2 === null || e.y2 === null) return null;
   const corner = rectCornerHit(e, p, tol);
   if (corner) return corner;
+  const edge = rectEdgeHit(e, p, tol);
+  if (edge) return edge;
   return pointInBox(p, e.x1, e.y1, e.x2, e.y2, tol.line) ? bodyHit(e) : null;
 }
 
 // Each corner maps to the time/price keys it controls, so dragging a derived
 // corner (e.g. x1,y2) resizes via time + price2 like TradingView.
 function rectCornerHit(e: ResolvedEntry, p: Pt, tol: Tol): Hit | null {
+  const x1 = e.x1!;
+  const y1 = e.y1!;
+  const x2 = e.x2!;
+  const y2 = e.y2!;
+  const cx = (x1 + x2) / 2;
+  const cy = (y1 + y2) / 2;
   const corners = [
-    { x: e.x1!, y: e.y1!, timeKey: "time", priceKey: "price" },
-    { x: e.x2!, y: e.y2!, timeKey: "time2", priceKey: "price2" },
-    { x: e.x1!, y: e.y2!, timeKey: "time", priceKey: "price2" },
-    { x: e.x2!, y: e.y1!, timeKey: "time2", priceKey: "price" },
+    { x: x1, y: y1, timeKey: "time", priceKey: "price" },
+    { x: x2, y: y2, timeKey: "time2", priceKey: "price2" },
+    { x: x1, y: y2, timeKey: "time", priceKey: "price2" },
+    { x: x2, y: y1, timeKey: "time2", priceKey: "price" },
   ] as const;
   for (const c of corners) {
     if (dist(p, c) <= tol.handle) {
-      return { id: e.d.id, region: { kind: "point", timeKey: c.timeKey, priceKey: c.priceKey } };
+      // The cursor follows the on-screen diagonal, not the anchor order: a
+      // rectangle drawn bottom-up still shows the right arrow direction.
+      const cursor: HitCursor =
+        (c.x - cx) * (c.y - cy) >= 0 ? "nwse-resize" : "nesw-resize";
+      return pointHit(e, c.timeKey, c.priceKey, cursor);
     }
+  }
+  return null;
+}
+
+/**
+ * Mid-edge handles, TradingView-style. Each one moves a single side, so the hit
+ * region carries only the time key (left/right) or the price key (top/bottom).
+ * The key is picked from the geometric edge, not the anchor order, so a
+ * rectangle drawn top-to-bottom still resizes the edge under the cursor.
+ */
+function rectEdgeHit(e: ResolvedEntry, p: Pt, tol: Tol): Hit | null {
+  const x1 = e.x1!;
+  const y1 = e.y1!;
+  const x2 = e.x2!;
+  const y2 = e.y2!;
+  const left = Math.min(x1, x2);
+  const right = Math.max(x1, x2);
+  const top = Math.min(y1, y2);
+  const bottom = Math.max(y1, y2);
+  const midX = (left + right) / 2;
+  const midY = (top + bottom) / 2;
+
+  const leftTimeKey: TimeKey = x1 <= x2 ? "time" : "time2";
+  const rightTimeKey: TimeKey = x1 <= x2 ? "time2" : "time";
+  const topPriceKey: PriceKey = y1 <= y2 ? "price" : "price2";
+  const bottomPriceKey: PriceKey = y1 <= y2 ? "price2" : "price";
+
+  if (dist(p, { x: midX, y: top }) <= tol.handle) {
+    return pointHit(e, null, topPriceKey, "ns-resize");
+  }
+  if (dist(p, { x: midX, y: bottom }) <= tol.handle) {
+    return pointHit(e, null, bottomPriceKey, "ns-resize");
+  }
+  if (dist(p, { x: left, y: midY }) <= tol.handle) {
+    return pointHit(e, leftTimeKey, null, "ew-resize");
+  }
+  if (dist(p, { x: right, y: midY }) <= tol.handle) {
+    return pointHit(e, rightTimeKey, null, "ew-resize");
   }
   return null;
 }

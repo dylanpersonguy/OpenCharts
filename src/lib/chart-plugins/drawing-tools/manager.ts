@@ -736,7 +736,8 @@ export class DrawingToolsManager {
       moved: false,
       isTouch,
     };
-    this.applyCursor("grabbing");
+    // Resizing keeps the directional arrow; moving the body shows grabbing.
+    this.applyCursor(hit.region.kind === "point" ? (hit.region.cursor ?? "grabbing") : "grabbing");
   }
 
   /** Other selected, unlocked drawings that ride along on a body drag. */
@@ -994,12 +995,14 @@ export class DrawingToolsManager {
       this.hoveredId = id;
       this.primitive.setHovered(id);
     }
-    this.applyCursor(hit ? "pointer" : null);
+    this.applyCursor(
+      hit ? (hit.region.kind === "point" && hit.region.cursor ? hit.region.cursor : "pointer") : null,
+    );
   }
 
-  private applyCursor(interactionCursor: "pointer" | "grabbing" | null): void {
-    if (interactionCursor) {
-      this.container.style.cursor = interactionCursor;
+  private applyCursor(cursor: string | null): void {
+    if (cursor) {
+      this.container.style.cursor = cursor;
       return;
     }
     this.container.style.cursor = this.tool !== "none" ? "crosshair" : "";
