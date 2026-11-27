@@ -50,12 +50,20 @@ export interface DrawCtxInfo {
 export type TimeKey = "time" | "time2" | "time3";
 export type PriceKey = "price" | "price2" | "price3" | "stopPrice" | "targetPrice";
 
+/** Resize cursor for a handle; omitted for handles with no obvious direction. */
+export type HitCursor = "nwse-resize" | "nesw-resize" | "ew-resize" | "ns-resize";
+
 /**
  * Where a hit landed on a drawing: a draggable anchor point (which may move
  * only one axis, e.g. a horizontal line's price) or the drawing body.
  */
 export type HitRegion =
-  | { kind: "point"; timeKey: TimeKey | null; priceKey: PriceKey | null }
+  | {
+      kind: "point";
+      timeKey: TimeKey | null;
+      priceKey: PriceKey | null;
+      cursor?: HitCursor;
+    }
   | { kind: "body" };
 
 export interface Hit {
